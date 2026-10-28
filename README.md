@@ -44,7 +44,7 @@ The command runs where you invoke `omaquery`, even when the popup appears on `la
 To try it without a real secret:
 
 ```sh
-omaquery run DEMO_TOKEN -- sh -c 'test -n "$DEMO_TOKEN" && echo "Value received"'
+omaquery run DEMO_TOKEN -- sh -c 'printf "%s\n" "$DEMO_TOKEN"'
 ```
 
-Review the displayed command before submitting: a command can print or transmit its environment. Escape cancels the prompt. See [AGENTS.md](AGENTS.md) for development notes and [LICENSE](LICENSE) for the license.
+Enter dummy text in the popup; it prints to your terminal. Review the displayed command before submitting: a command can print or transmit its environment. Escape cancels the prompt. See [AGENTS.md](AGENTS.md) for development notes and [LICENSE](LICENSE) for the license.
