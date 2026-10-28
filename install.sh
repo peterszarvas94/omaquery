@@ -3,7 +3,6 @@ set -euo pipefail
 
 repo='peterszarvas94/omaquery'
 archive="https://github.com/${repo}/archive/refs/heads/master.tar.gz"
-binary="${HOME}/.local/bin/omaquery"
 
 die() { printf 'omaquery install: %s\n' "$*" >&2; exit 1; }
 
@@ -11,7 +10,7 @@ die() { printf 'omaquery install: %s\n' "$*" >&2; exit 1; }
 . /etc/os-release
 [[ ${ID:-} == omarchy ]] || die 'requires an Omarchy machine'
 
-for command in curl tar install omarchy omarchy-shell; do
+for command in curl tar omarchy omarchy-shell; do
   command -v "$command" >/dev/null || die "missing $command"
 done
 omarchy-shell shell ping >/dev/null || die 'start and unlock the Omarchy desktop first'
@@ -30,8 +29,7 @@ source_dir="${work_dir}/omaquery-master"
 printf 'Building omaquery...\n'
 ( cd "$source_dir" && go build -trimpath -o "${work_dir}/omaquery" ./cmd/omaquery )
 
-install -Dm755 "${work_dir}/omaquery" "$binary"
-"$binary" install
+"${work_dir}/omaquery" install
 
 if [[ :$PATH: != *":${HOME}/.local/bin:"* ]]; then
   printf 'Add %s/.local/bin to your PATH to use omaquery.\n' "$HOME"

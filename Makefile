@@ -1,5 +1,3 @@
-PREFIX ?= $(HOME)/.local
-
 .PHONY: build test check install
 build:
 	go build -trimpath -o build/omaquery ./cmd/omaquery
@@ -13,5 +11,4 @@ check: test
 	qmllint -I "$${OMARCHY_PATH:-/usr/share/omarchy}/shell" Popup.qml
 
 install: build
-	install -Dm755 build/omaquery "$(PREFIX)/bin/omaquery"
-	"$(PREFIX)/bin/omaquery" install
+	build/omaquery install
