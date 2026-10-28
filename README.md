@@ -18,7 +18,7 @@ omaquery install
 Install or update another Omarchy machine over SSH:
 
 ```sh
-omaquery install --host laptop
+omaquery install --remote laptop
 ```
 
 This uploads the same CLI version to the target, updates its plugin, and restarts the Omarchy shell when the plugin was already enabled. It needs SSH key access and an unlocked desktop on the target. Use `--force` only when the remote has a newer version and you intentionally want to replace it.
@@ -39,16 +39,16 @@ make install
 
 | Command | Purpose |
 | --- | --- |
-| `omaquery install [--host SSH_HOST]` | Install or update the CLI and prompt locally or on another Omarchy machine. |
+| `omaquery install [--remote SSH_HOST]` | Install or update the CLI and prompt locally or on another Omarchy machine. |
 | `omaquery run [options] NAME[:hint] ... -- COMMAND [ARG ...]` | Prompt for values and run a command with them in its environment. |
 | `omaquery version` or `omaquery --version` | Print the version. |
 | `omaquery help`, `omaquery --help`, or `omaquery run --help` | Show Cobra help. |
 
-`run` options: `--reason TEXT`, `--timeout 5m` (or seconds), and `--prompt-on SSH_HOST`. Options come before value names. `serve` and `relay` are internal commands used by the popup and SSH transport.
+`run` options: `--reason TEXT`, `--timeout 5m` (or seconds), and `--remote SSH_HOST`. Options come before value names. `serve` and `relay` are internal commands used by the popup and SSH transport. `--prompt-on` remains as a deprecated alias for `--remote`.
 
 ```sh
 omaquery run API_TOKEN -- ./deploy
-omaquery run --prompt-on laptop API_TOKEN -- ./deploy
+omaquery run --remote laptop API_TOKEN -- ./deploy
 ```
 
 The command runs where you invoke `omaquery`, even when the popup appears on `laptop`. Remote prompting needs SSH access and an unlocked Omarchy desktop on the target. The SSH connection lasts only for the request; `omaquery` opens no network listener or secret store.

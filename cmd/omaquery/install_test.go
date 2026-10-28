@@ -8,15 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-func stubInstallCommand(t *testing.T, handler func(string, ...string) ([]byte, error)) {
+func stubInstallCommand(t *testing.T, handler func([]string, string, ...string) ([]byte, error)) {
 	t.Helper()
 	previous := runInstallCommand
-	runInstallCommand = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		return handler(name, args...)
+	runInstallCommand = func(_ context.Context, env []string, name string, args ...string) ([]byte, error) {
+		return handler(env, name, args...)
 	}
 	t.Cleanup(func() { runInstallCommand = previous })
 }
@@ -31,7 +32,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	}
 
 	var calls []string
-	stubInstallCommand(t, func(name string, args ...string) ([]byte, error) {
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		calls = append(calls, name+" "+strings.Join(args, " "))
 		if name == "omarchy" && len(args) == 3 && args[0] == "plugin" && args[1] == "list" {
 			return []byte("[]"), nil
@@ -81,7 +82,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls = nil
-	stubInstallCommand(t, func(name string, args ...string) ([]byte, error) {
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		calls = append(calls, name+" "+strings.Join(args, " "))
 		if name == "omarchy" && len(args) == 3 && args[0] == "plugin" && args[1] == "list" {
 			return []byte(`[{"id":"` + bundle.ID + `","enabled":true}]`), nil
@@ -97,6 +98,35 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Updated omaquery 0.2.0 -> 0.3.0") {
 		t.Fatalf("output: %s", out.String())
+	}
+}
+
+func TestInstallEnvironmentKeepsDesktopSettings(t *testing.T) {
+	path := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(path, "shell"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "shell", "shell.qml"), []byte("// fixture\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OMARCHY_PATH", path)
+	t.Setenv("XDG_RUNTIME_DIR", "")
+	env, err := installEnvironment(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]string{}
+	for _, entry := range env {
+		key, value, found := strings.Cut(entry, "=")
+		if found {
+			values[key] = value
+		}
+	}
+	if values["OMARCHY_PATH"] != path {
+		t.Fatalf("OMARCHY_PATH: %q", values["OMARCHY_PATH"])
+	}
+	if values["XDG_RUNTIME_DIR"] != "/run/user/"+strconv.Itoa(os.Getuid()) {
+		t.Fatalf("XDG_RUNTIME_DIR: %q", values["XDG_RUNTIME_DIR"])
 	}
 }
 
@@ -145,7 +175,7 @@ func TestArchMatches(t *testing.T) {
 }
 
 func TestProbeRemote(t *testing.T) {
-	stubInstallCommand(t, func(name string, args ...string) ([]byte, error) {
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		if name != "ssh" {
 			t.Fatalf("unexpected command: %s %v", name, args)
 		}
@@ -180,7 +210,7 @@ func TestInstallRemoteOlderAndNewer(t *testing.T) {
 	if remoteArch == "" {
 		t.Skip("unsupported test architecture")
 	}
-	stubInstallCommand(t, func(name string, args ...string) ([]byte, error) {
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		return []byte("arch=" + remoteArch + "\nversion=0.2.0\n"), nil
 	})
 	var out bytes.Buffer
@@ -191,7 +221,7 @@ func TestInstallRemoteOlderAndNewer(t *testing.T) {
 		t.Fatalf("uploads=%d output=%q", uploads, out.String())
 	}
 
-	stubInstallCommand(t, func(name string, args ...string) ([]byte, error) {
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		return []byte("arch=" + remoteArch + "\nversion=9.0.0\n"), nil
 	})
 	out.Reset()

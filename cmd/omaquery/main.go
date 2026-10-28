@@ -45,7 +45,7 @@ type response struct {
 var namePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func fail(err error) int { fmt.Fprintln(os.Stderr, "omaquery:", err); return 2 }
-func parseRun(args []string, sep int, reason, timeout, promptOn string) (request, time.Duration, error) {
+func parseRun(args []string, sep int, reason, timeout, remote string) (request, time.Duration, error) {
 	var req request
 	duration, err := parseTimeout(timeout)
 	if err != nil || duration <= 0 || duration > 24*time.Hour {
@@ -68,10 +68,10 @@ func parseRun(args []string, sep int, reason, timeout, promptOn string) (request
 	}
 	req.Command = args[sep:]
 	req.Reason = reason
-	if promptOn != "" && !validTarget(promptOn) {
-		return req, 0, errors.New("prompt-on must be an SSH host or user@host without options")
+	if remote != "" && !validTarget(remote) {
+		return req, 0, errors.New("remote must be an SSH host or user@host without options")
 	}
-	req.Target = promptOn
+	req.Target = remote
 	req.Cwd, err = os.Getwd()
 	if err != nil {
 		return req, 0, err

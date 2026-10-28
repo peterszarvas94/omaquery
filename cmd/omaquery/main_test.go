@@ -38,7 +38,7 @@ func TestCobraHelpAndCommandBoundary(t *testing.T) {
 		want []string
 	}{
 		{[]string{"--help"}, []string{"Available Commands:", "install", "run", "version", "help"}},
-		{[]string{"run", "--help"}, []string{"--prompt-on", "--reason", "--timeout", "NAME[:hint]"}},
+		{[]string{"run", "--help"}, []string{"--remote", "--reason", "--timeout", "NAME[:hint]"}},
 	} {
 		code := 0
 		root := newRootCommand(&code)

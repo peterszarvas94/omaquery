@@ -83,19 +83,19 @@ func newRootCommand(code *int) *cobra.Command {
 }
 
 func newInstallCommand() *cobra.Command {
-	var host string
+	var remote string
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "install [flags]",
 		Short: "Install or update omaquery and its Omarchy prompt",
 		Long: "Install or update the CLI and prompt plugin on this Omarchy machine.\n" +
-			"With --host, upload this omaquery version to another Omarchy machine over\n" +
+			"With --remote, upload this omaquery version to another Omarchy machine over\n" +
 			"SSH and install it there. The command is safe to rerun to update.",
-		Example: "  omaquery install\n  omaquery install --host laptop",
+		Example: "  omaquery install\n  omaquery install --remote laptop",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if host != "" && !validTarget(host) {
-				return errors.New("host must be an SSH host or user@host without options")
+			if remote != "" && !validTarget(remote) {
+				return errors.New("remote must be an SSH host or user@host without options")
 			}
 			self, err := os.Executable()
 			if err != nil {
@@ -103,29 +103,35 @@ func newInstallCommand() *cobra.Command {
 			}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			if host == "" {
+			if remote == "" {
 				return installLocal(ctx, self, cmd.OutOrStdout())
 			}
-			return installRemote(ctx, host, self, force, cmd.OutOrStdout())
+			return installRemote(ctx, remote, self, force, cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringVar(&host, "host", "", "SSH host on which to install or update")
+	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine on which to install or update")
 	cmd.Flags().BoolVar(&force, "force", false, "Update even when the remote version is newer")
 	return cmd
 }
 
 func newRunCommand(execute func(request, time.Duration) int, code *int) *cobra.Command {
-	var reason, timeout, promptOn string
+	var reason, timeout, remote, legacyRemote string
 	cmd := &cobra.Command{
 		Use:   "run [flags] NAME[:hint]... -- COMMAND [ARG...]",
 		Short: "Prompt for values and run a command",
 		Long: "Prompt for up to 16 values and pass them to the command's environment.\n" +
-			"The command runs on this machine, even when --prompt-on shows the popup\n" +
+			"The command runs on this machine, even when --remote shows the popup\n" +
 			"elsewhere. Review the displayed command before submitting: it can print\n" +
 			"or transmit its environment. Escape cancels the prompt.",
-		Example: "  omaquery run API_TOKEN -- ./deploy\n  omaquery run --prompt-on laptop API_TOKEN -- ./deploy\n  omaquery run API_TOKEN -- sh -c 'printf \"%s\\n\" \"$API_TOKEN\"'",
+		Example: "  omaquery run API_TOKEN -- ./deploy\n  omaquery run --remote laptop API_TOKEN -- ./deploy\n  omaquery run API_TOKEN -- sh -c 'printf \"%s\\n\" \"$API_TOKEN\"'",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			req, duration, err := parseRun(args, cmd.Flags().ArgsLenAtDash(), reason, timeout, promptOn)
+			if legacyRemote != "" {
+				if remote != "" && remote != legacyRemote {
+					return errors.New("use only --remote")
+				}
+				remote = legacyRemote
+			}
+			req, duration, err := parseRun(args, cmd.Flags().ArgsLenAtDash(), reason, timeout, remote)
 			if err != nil {
 				return err
 			}
@@ -135,7 +141,9 @@ func newRunCommand(execute func(request, time.Duration) int, code *int) *cobra.C
 	}
 	cmd.Flags().StringVar(&reason, "reason", "", "Reason shown in the popup")
 	cmd.Flags().StringVar(&timeout, "timeout", "5m", "Prompt timeout (seconds or Go duration; max 24h)")
-	cmd.Flags().StringVar(&promptOn, "prompt-on", "", "SSH host on which to show the popup")
+	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine on which to show the popup")
+	cmd.Flags().StringVar(&legacyRemote, "prompt-on", "", "Deprecated: use --remote")
+	_ = cmd.Flags().MarkDeprecated("prompt-on", "use --remote instead")
 	return cmd
 }
 

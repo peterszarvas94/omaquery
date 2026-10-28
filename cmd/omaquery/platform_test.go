@@ -29,8 +29,19 @@ func TestMain(m *testing.M) {
 		os.RemoveAll(dir)
 		os.Exit(1)
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "shell"), 0755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.RemoveAll(dir)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "shell", "shell.qml"), []byte("// fixture\n"), 0644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.RemoveAll(dir)
+		os.Exit(1)
+	}
 	osReleasePath = path
 	os.Setenv("OMAQUERY_TEST_OS_RELEASE", path)
+	os.Setenv("OMARCHY_PATH", dir)
 
 	code := m.Run()
 	os.RemoveAll(dir)

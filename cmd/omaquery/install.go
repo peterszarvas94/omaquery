@@ -21,8 +21,11 @@ import (
 
 var pluginIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
-var runInstallCommand = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+var runInstallCommand = func(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if env != nil {
+		cmd.Env = env
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -34,6 +37,67 @@ var runInstallCommand = func(ctx context.Context, name string, args ...string) (
 		return out, fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
 	}
 	return out, nil
+}
+
+// installEnvironment supplies the variables an SSH install does not inherit
+// from the desktop session, especially OMARCHY_PATH. Without it omarchy-shell
+// refuses to rescan or enable the plugin.
+func installEnvironment(ctx context.Context) ([]string, error) {
+	env := append([]string(nil), os.Environ()...)
+	value := func(key string) string {
+		prefix := key + "="
+		for i := len(env) - 1; i >= 0; i-- {
+			if strings.HasPrefix(env[i], prefix) {
+				return strings.TrimPrefix(env[i], prefix)
+			}
+		}
+		return ""
+	}
+	set := func(key, value string) {
+		prefix := key + "="
+		for i := len(env) - 1; i >= 0; i-- {
+			if strings.HasPrefix(env[i], prefix) {
+				env[i] = prefix + value
+				return
+			}
+		}
+		env = append(env, prefix+value)
+	}
+
+	if value("XDG_RUNTIME_DIR") == "" {
+		set("XDG_RUNTIME_DIR", fmt.Sprintf("/run/user/%d", os.Getuid()))
+	}
+	if path := value("OMARCHY_PATH"); path != "" && omarchyPathValid(path) {
+		return env, nil
+	}
+
+	// A session opened by SSH has no desktop environment. Ask the user manager
+	// for the environment the graphical session started with.
+	cmd := exec.CommandContext(ctx, "systemctl", "--user", "show-environment")
+	cmd.Env = env
+	if out, err := cmd.Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			key, path, found := strings.Cut(line, "=")
+			if found && key == "OMARCHY_PATH" && omarchyPathValid(path) {
+				set("OMARCHY_PATH", path)
+				return env, nil
+			}
+		}
+	}
+
+	home, _ := os.UserHomeDir()
+	for _, path := range []string{"/usr/share/omarchy", filepath.Join(home, ".local", "share", "omarchy")} {
+		if omarchyPathValid(path) {
+			set("OMARCHY_PATH", path)
+			return env, nil
+		}
+	}
+	return nil, errors.New("OMARCHY_PATH is not set and no Omarchy installation was found")
+}
+
+func omarchyPathValid(path string) bool {
+	_, err := os.Stat(filepath.Join(path, "shell", "shell.qml"))
+	return err == nil
 }
 
 type pluginBundle struct {
@@ -111,8 +175,8 @@ func installedPluginVersion(dir string) string {
 	return manifest.Version
 }
 
-func pluginEnabled(ctx context.Context, id string) bool {
-	out, err := runInstallCommand(ctx, "omarchy", "plugin", "list", "--json")
+func pluginEnabled(ctx context.Context, env []string, id string) bool {
+	out, err := runInstallCommand(ctx, env, "omarchy", "plugin", "list", "--json")
 	if err != nil {
 		return false
 	}
@@ -131,13 +195,13 @@ func pluginEnabled(ctx context.Context, id string) bool {
 	return false
 }
 
-func enablePlugin(ctx context.Context, id string) error {
-	if pluginEnabled(ctx, id) {
+func enablePlugin(ctx context.Context, env []string, id string) error {
+	if pluginEnabled(ctx, env, id) {
 		return nil
 	}
-	if _, err := runInstallCommand(ctx, "omarchy", "plugin", "enable", id); err != nil {
+	if _, err := runInstallCommand(ctx, env, "omarchy", "plugin", "enable", id); err != nil {
 		// The list probe can race plugin discovery immediately after a rescan.
-		if pluginEnabled(ctx, id) {
+		if pluginEnabled(ctx, env, id) {
 			return nil
 		}
 		return err
@@ -156,6 +220,10 @@ func installLocal(ctx context.Context, executable string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	env, err := installEnvironment(ctx)
+	if err != nil {
+		return err
+	}
 	pluginDir, err := pluginInstallDir(bundle.ID)
 	if err != nil {
 		return err
@@ -169,7 +237,7 @@ func installLocal(ctx context.Context, executable string, out io.Writer) error {
 	}
 
 	previousVersion := installedPluginVersion(pluginDir)
-	wasEnabled := pluginEnabled(ctx, bundle.ID)
+	wasEnabled := pluginEnabled(ctx, env, bundle.ID)
 	if err := os.MkdirAll(pluginDir, 0755); err != nil {
 		return err
 	}
@@ -179,20 +247,20 @@ func installLocal(ctx context.Context, executable string, out io.Writer) error {
 	if err := writeFileAtomic(filepath.Join(pluginDir, "Popup.qml"), bundle.Popup, 0644); err != nil {
 		return err
 	}
-	if _, err := runInstallCommand(ctx, "omarchy", "plugin", "validate", pluginDir); err != nil {
+	if _, err := runInstallCommand(ctx, env, "omarchy", "plugin", "validate", pluginDir); err != nil {
 		return err
 	}
 	if err := installExecutable(executable, binaryPath); err != nil {
 		return err
 	}
-	if _, err := runInstallCommand(ctx, "omarchy-shell", "shell", "rescanPlugins"); err != nil {
+	if _, err := runInstallCommand(ctx, env, "omarchy-shell", "shell", "rescanPlugins"); err != nil {
 		return err
 	}
-	if err := enablePlugin(ctx, bundle.ID); err != nil {
+	if err := enablePlugin(ctx, env, bundle.ID); err != nil {
 		return err
 	}
 	if wasEnabled {
-		if _, err := runInstallCommand(ctx, "omarchy", "restart", "shell"); err != nil {
+		if _, err := runInstallCommand(ctx, env, "omarchy", "restart", "shell"); err != nil {
 			return fmt.Errorf("installed, but shell restart failed: %w", err)
 		}
 	}
@@ -284,7 +352,7 @@ if command -v omaquery >/dev/null 2>&1; then
   v=${v#omaquery }
   printf 'version=%s\n' "$v"
 fi`
-	out, err := runInstallCommand(ctx, "ssh", append(sshBaseArgs(target), script)...)
+	out, err := runInstallCommand(ctx, nil, "ssh", append(sshBaseArgs(target), script)...)
 	if err != nil {
 		return remoteInstallState{}, err
 	}
@@ -353,7 +421,7 @@ func compareVersions(a, b string) int {
 
 func installRemote(ctx context.Context, target, executable string, force bool, out io.Writer) error {
 	if !validTarget(target) {
-		return errors.New("host must be an SSH host or user@host without options")
+		return errors.New("remote must be an SSH host or user@host without options")
 	}
 	if runtime.GOOS != "linux" {
 		return errors.New("remote install requires a Linux build of omaquery")
