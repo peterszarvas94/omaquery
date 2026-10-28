@@ -6,7 +6,7 @@
 
 - Use a task branch and pull request. Do not edit Omarchy's packaged files under `/usr/share/omarchy/`.
 - Read the affected Go and QML paths together. The CLI, local bridge, remote relay, and popup share one request/response protocol.
-- Keep documentation and examples free of personal names, machine names, private domains, addresses, tokens, and workstation paths. Use `laptop`, `desktop.example.test`, and dummy values in examples.
+- Keep examples free of personal names, machine names, private domains, addresses, tokens, and workstation paths. Use `laptop`, `desktop.example.test`, and dummy values. Public GitHub install URLs may name this repository's owner.
 - Do not use Python scripts in this repository's workflow.
 
 ## Security invariants
