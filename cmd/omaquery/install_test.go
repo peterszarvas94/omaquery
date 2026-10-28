@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,7 +28,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	source := filepath.Join(home, "source")
-	if err := os.WriteFile(source, []byte("binary-v0.3.0"), 0755); err != nil {
+	if err := os.WriteFile(source, []byte("binary-v0.4.0"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +50,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	binaryPath := filepath.Join(home, ".local", "bin", "omaquery")
-	if data, err := os.ReadFile(binaryPath); err != nil || string(data) != "binary-v0.3.0" {
+	if data, err := os.ReadFile(binaryPath); err != nil || string(data) != "binary-v0.4.0" {
 		t.Fatalf("installed binary: %q %v", data, err)
 	}
 	if info, err := os.Stat(binaryPath); err != nil || info.Mode().Perm() != 0755 {
@@ -74,7 +75,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	if strings.Contains(joined, "omarchy restart shell") {
 		t.Fatal("fresh install restarted the shell")
 	}
-	if !strings.Contains(out.String(), "Installed omaquery 0.3.0") {
+	if !strings.Contains(out.String(), "Installed omaquery 0.4.0") {
 		t.Fatalf("output: %s", out.String())
 	}
 
@@ -96,7 +97,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	if !strings.Contains(strings.Join(calls, "\n"), "omarchy restart shell") {
 		t.Fatal("update did not restart the shell")
 	}
-	if !strings.Contains(out.String(), "Updated omaquery 0.2.0 -> 0.3.0") {
+	if !strings.Contains(out.String(), "Updated omaquery 0.2.0 -> 0.4.0") {
 		t.Fatalf("output: %s", out.String())
 	}
 }
@@ -135,12 +136,92 @@ func TestInstallEnvironmentKeepsDesktopSettings(t *testing.T) {
 	}
 }
 
+func TestInstallLocalRemovesLegacyPlugin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	source := filepath.Join(home, "source")
+	if err := os.WriteFile(source, []byte("binary"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	pluginRoot := filepath.Join(home, "config", "omarchy", "plugins")
+	legacyDir := filepath.Join(pluginRoot, "omaquery.prompt")
+	legacyBackup := filepath.Join(pluginRoot, ".omaquery.prompt.bak.20260101000000")
+	for _, dir := range []string{legacyDir, legacyBackup} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "manifest.json"), []byte(`{"id":"omaquery.prompt","version":"0.3.0"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls []string
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		if name == "omarchy" && len(args) == 4 && args[0] == "plugin" && args[1] == "remove" {
+			return nil, os.RemoveAll(legacyDir)
+		}
+		if name == "omarchy" && len(args) == 3 && args[0] == "plugin" && args[1] == "list" {
+			return []byte("[]"), nil
+		}
+		return nil, nil
+	})
+	var out bytes.Buffer
+	if err := installLocal(context.Background(), source, &out); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(legacyDir); !os.IsNotExist(err) {
+		t.Fatalf("legacy plugin still exists: %v", err)
+	}
+	if _, err := os.Stat(legacyBackup); !os.IsNotExist(err) {
+		t.Fatalf("legacy backup still exists: %v", err)
+	}
+	joined := strings.Join(calls, "\n")
+	if !strings.Contains(joined, "omarchy plugin remove omaquery.prompt --yes") {
+		t.Fatalf("legacy removal missing:\n%s", joined)
+	}
+	if !strings.Contains(joined, "omarchy restart shell") {
+		t.Fatal("migration did not restart the shell")
+	}
+}
+
+func TestInstallLocalTakesOverPluginManagerCheckout(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	source := filepath.Join(home, "source")
+	if err := os.WriteFile(source, []byte("binary"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := loadPluginBundle()
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitDir := filepath.Join(home, "config", "omarchy", "plugins", bundle.ID, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
+		if name == "omarchy" && len(args) == 3 && args[0] == "plugin" && args[1] == "list" {
+			return []byte("[]"), nil
+		}
+		return nil, nil
+	})
+	if err := installLocal(context.Background(), source, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(gitDir); !os.IsNotExist(err) {
+		t.Fatalf("plugin manager checkout was not converted: %v", err)
+	}
+}
+
 func TestInstallPluginBundle(t *testing.T) {
 	bundle, err := loadPluginBundle()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bundle.ID != "omaquery.prompt" || bundle.Version != version {
+	if bundle.ID != "io.github.peterszarvas94.omaquery" || bundle.Version != version {
 		t.Fatalf("bundle: %+v, CLI version %s", bundle, version)
 	}
 	var manifest map[string]any
@@ -222,7 +303,7 @@ func TestInstallRemoteOlderAndNewer(t *testing.T) {
 	if err := installRemote(context.Background(), "laptop", source, false, &out); err != nil {
 		t.Fatal(err)
 	}
-	if uploads != 1 || !strings.Contains(out.String(), "0.2.0 -> 0.3.0") || !strings.Contains(out.String(), "remote install output") {
+	if uploads != 1 || !strings.Contains(out.String(), "0.2.0 -> 0.4.0") || !strings.Contains(out.String(), "remote install output") {
 		t.Fatalf("uploads=%d output=%q", uploads, out.String())
 	}
 

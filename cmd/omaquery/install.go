@@ -21,6 +21,11 @@ import (
 
 var pluginIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
+// Older CLI releases installed the prompt under this id. The namespaced id is
+// the permanent marketplace identity, so move existing installations over
+// instead of leaving two services behind.
+var legacyPluginIDs = []string{"omaquery.prompt"}
+
 var runInstallCommand = func(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	if env != nil {
@@ -217,6 +222,38 @@ func enablePlugin(ctx context.Context, env []string, id string) error {
 	return nil
 }
 
+func removeLegacyPlugins(ctx context.Context, env []string, currentID string) (bool, error) {
+	removed := false
+	for _, id := range legacyPluginIDs {
+		if id == currentID {
+			continue
+		}
+		dir, err := pluginInstallDir(id)
+		if err != nil {
+			return removed, err
+		}
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			continue
+		}
+		removed = true
+		if _, err := runInstallCommand(ctx, env, "omarchy", "plugin", "remove", id, "--yes"); err != nil {
+			// The old id may no longer be known to the shell. Remove its files
+			// and refresh discovery rather than leaving a second service behind.
+			if err := os.RemoveAll(dir); err != nil {
+				return removed, fmt.Errorf("remove legacy plugin %s: %w", id, err)
+			}
+			if _, err := runInstallCommand(ctx, env, "omarchy-shell", "shell", "rescanPlugins"); err != nil {
+				return removed, err
+			}
+		}
+		backups, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), "."+id+".bak.*"))
+		for _, backup := range backups {
+			_ = os.RemoveAll(backup)
+		}
+	}
+	return removed, nil
+}
+
 func installLocal(ctx context.Context, executable string, out io.Writer) error {
 	if err := requireOmarchy(); err != nil {
 		return err
@@ -243,7 +280,19 @@ func installLocal(ctx context.Context, executable string, out io.Writer) error {
 	if info, err := os.Lstat(pluginDir); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("plugin directory is a symlink: %s", pluginDir)
 	}
+	// A marketplace install is a git checkout. The CLI owns plugin updates from
+	// here on; keeping .git would leave the checkout dirty after this write.
+	if _, err := os.Stat(filepath.Join(pluginDir, ".git")); err == nil {
+		if err := os.RemoveAll(filepath.Join(pluginDir, ".git")); err != nil {
+			return fmt.Errorf("take over plugin updates: %w", err)
+		}
+		fmt.Fprintln(out, "Taking over plugin updates from the plugin-manager checkout.")
+	}
 
+	legacyRemoved, err := removeLegacyPlugins(ctx, env, bundle.ID)
+	if err != nil {
+		return err
+	}
 	previousVersion := installedPluginVersion(pluginDir)
 	wasEnabled := pluginEnabled(ctx, env, bundle.ID)
 	if err := os.MkdirAll(pluginDir, 0755); err != nil {
@@ -267,7 +316,7 @@ func installLocal(ctx context.Context, executable string, out io.Writer) error {
 	if err := enablePlugin(ctx, env, bundle.ID); err != nil {
 		return err
 	}
-	if wasEnabled {
+	if wasEnabled || legacyRemoved {
 		if _, err := runInstallCommand(ctx, env, "omarchy", "restart", "shell"); err != nil {
 			return fmt.Errorf("installed, but shell restart failed: %w", err)
 		}

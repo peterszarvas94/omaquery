@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "omaquery.prompt",
+  "id": "io.github.peterszarvas94.omaquery",
   "name": "omaquery",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "omaquery contributors",
   "description": "Desktop prompts for command environment values.",
   "kinds": ["service"],
