@@ -1,4 +1,4 @@
-module omaquery
+module github.com/peterszarvas94/omaquery
 
 go 1.24
 

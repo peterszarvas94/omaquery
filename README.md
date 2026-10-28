@@ -12,6 +12,12 @@ curl -fsSL https://raw.githubusercontent.com/peterszarvas94/omaquery/master/inst
 
 The installer builds the CLI in `~/.local/bin` and enables the popup plugin. It installs Go through Omarchy if needed. Keep `~/.local/bin` on your `PATH`. Run the installer on each machine that will show prompts.
 
+To install just the CLI with Go (the popup still needs the installer above):
+
+```sh
+go install github.com/peterszarvas94/omaquery/cmd/omaquery@latest
+```
+
 Manual install (requires Go 1.24+):
 
 ```sh
