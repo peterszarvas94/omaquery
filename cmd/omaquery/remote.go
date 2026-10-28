@@ -27,12 +27,16 @@ var targetPattern = regexp.MustCompile(`^(?:[A-Za-z_][A-Za-z0-9_-]*@)?[A-Za-z0-9
 
 func validTarget(target string) bool { return len(target) <= 253 && targetPattern.MatchString(target) }
 
-func sshArgs(target string) []string {
+func sshBaseArgs(target string) []string {
 	return []string{
 		"-T", "-oBatchMode=yes", "-oStrictHostKeyChecking=yes",
 		"-oConnectTimeout=5", "-oConnectionAttempts=1",
-		target, "~/.local/bin/omaquery relay",
+		target,
 	}
+}
+
+func sshArgs(target string) []string {
+	return append(sshBaseArgs(target), "~/.local/bin/omaquery relay")
 }
 
 type relayResponse struct {

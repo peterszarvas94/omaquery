@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -12,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func main() { os.Exit(mainCode(os.Args[1:])) }
 
@@ -45,6 +46,7 @@ func newRootCommand(code *int) *cobra.Command {
 	root.AddCommand(newRunCommand(func(req request, duration time.Duration) int {
 		return runRequest(req, duration)
 	}, code))
+	root.AddCommand(newInstallCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print the version",
@@ -78,6 +80,38 @@ func newRootCommand(code *int) *cobra.Command {
 		},
 	})
 	return root
+}
+
+func newInstallCommand() *cobra.Command {
+	var host string
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "install [flags]",
+		Short: "Install or update omaquery and its Omarchy prompt",
+		Long: "Install or update the CLI and prompt plugin on this Omarchy machine.\n" +
+			"With --host, upload this omaquery version to another Omarchy machine over\n" +
+			"SSH and install it there. The command is safe to rerun to update.",
+		Example: "  omaquery install\n  omaquery install --host laptop",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if host != "" && !validTarget(host) {
+				return errors.New("host must be an SSH host or user@host without options")
+			}
+			self, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			if host == "" {
+				return installLocal(ctx, self, cmd.OutOrStdout())
+			}
+			return installRemote(ctx, host, self, force, cmd.OutOrStdout())
+		},
+	}
+	cmd.Flags().StringVar(&host, "host", "", "SSH host on which to install or update")
+	cmd.Flags().BoolVar(&force, "force", false, "Update even when the remote version is newer")
+	return cmd
 }
 
 func newRunCommand(execute func(request, time.Duration) int, code *int) *cobra.Command {

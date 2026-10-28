@@ -6,36 +6,40 @@ Prompting requires Omarchy (`ID=omarchy` in `/etc/os-release`) on both machines.
 
 ## Install
 
-On an Omarchy desktop with Quickshell:
+On an Omarchy desktop with Quickshell and Go 1.24+:
+
+```sh
+go install github.com/peterszarvas94/omaquery/cmd/omaquery@latest
+omaquery install
+```
+
+`omaquery install` installs or updates the CLI and the prompt plugin together. It is safe to rerun after a new release and keeps the installed versions in sync. Keep `~/.local/bin` on your `PATH`.
+
+Install or update another Omarchy machine over SSH:
+
+```sh
+omaquery install --host laptop
+```
+
+This uploads the same CLI version to the target, updates its plugin, and restarts the Omarchy shell when the plugin was already enabled. It needs SSH key access and an unlocked desktop on the target. Use `--force` only when the remote has a newer version and you intentionally want to replace it.
+
+To bootstrap a machine without Go, or install from a local checkout:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/peterszarvas94/omaquery/master/install.sh | bash
 ```
 
-The installer builds the CLI in `~/.local/bin` and enables the popup plugin. It installs Go through Omarchy if needed. Keep `~/.local/bin` on your `PATH`. Run the installer on each machine that will show prompts.
-
-To install just the CLI with Go (the popup still needs the installer above):
-
-```sh
-go install github.com/peterszarvas94/omaquery/cmd/omaquery@latest
-```
-
-Manual install (requires Go 1.24+):
-
 ```sh
 git clone https://github.com/peterszarvas94/omaquery.git
 cd omaquery
 make install
-omarchy-shell shell rescanPlugins
-omarchy plugin enable omaquery.prompt
 ```
-
-After a manual plugin update, run `omarchy restart shell`.
 
 ## Commands
 
 | Command | Purpose |
 | --- | --- |
+| `omaquery install [--host SSH_HOST]` | Install or update the CLI and prompt locally or on another Omarchy machine. |
 | `omaquery run [options] NAME[:hint] ... -- COMMAND [ARG ...]` | Prompt for values and run a command with them in its environment. |
 | `omaquery version` or `omaquery --version` | Print the version. |
 | `omaquery help`, `omaquery --help`, or `omaquery run --help` | Show Cobra help. |

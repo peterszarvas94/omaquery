@@ -1,5 +1,4 @@
 PREFIX ?= $(HOME)/.local
-PLUGIN_DIR ?= $(HOME)/.config/omarchy/plugins/omaquery.prompt
 
 .PHONY: build test check install
 build:
@@ -15,5 +14,4 @@ check: test
 
 install: build
 	install -Dm755 build/omaquery "$(PREFIX)/bin/omaquery"
-	install -Dm644 manifest.json "$(PLUGIN_DIR)/manifest.json"
-	install -Dm644 Popup.qml "$(PLUGIN_DIR)/Popup.qml"
+	"$(PREFIX)/bin/omaquery" install
