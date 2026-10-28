@@ -3,11 +3,39 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestMain gives every test process a private Omarchy release fixture. Tests
+// that exercise the rejection path override osReleasePath themselves.
+func TestMain(m *testing.M) {
+	if path := os.Getenv("OMAQUERY_TEST_OS_RELEASE"); path != "" {
+		osReleasePath = path
+		os.Exit(m.Run())
+	}
+
+	dir, err := os.MkdirTemp("", "omaquery-test-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	path := filepath.Join(dir, "os-release")
+	if err := os.WriteFile(path, []byte("ID=omarchy\n"), 0600); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.RemoveAll(dir)
+		os.Exit(1)
+	}
+	osReleasePath = path
+	os.Setenv("OMAQUERY_TEST_OS_RELEASE", path)
+
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 func TestOmarchyRelease(t *testing.T) {
 	for _, test := range []struct {
