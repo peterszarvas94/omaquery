@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.6.0"
+const version = "0.7.0"
 
 func main() { os.Exit(mainCode(os.Args[1:])) }
 
@@ -47,6 +47,7 @@ func newRootCommand(code *int) *cobra.Command {
 		return runRequest(req, duration)
 	}, code))
 	root.AddCommand(newInstallCommand())
+	root.AddCommand(newUpdateCommand())
 	root.AddCommand(newUninstallCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
@@ -88,10 +89,10 @@ func newInstallCommand() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "install [flags]",
-		Short: "Install or update omaquery and its Omarchy prompt",
-		Long: "Install or update the CLI and prompt plugin on this Omarchy machine.\n" +
+		Short: "Install the current omaquery version and Omarchy prompt",
+		Long: "Install or repair the CLI and prompt plugin on this Omarchy machine.\n" +
 			"With --remote, upload this omaquery version to another Omarchy machine over\n" +
-			"SSH and install it there. The command is safe to rerun to update.",
+			"SSH and install it there. Use update to fetch a newer release.",
 		Example: "  omaquery install\n  omaquery install --remote laptop",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -110,7 +111,32 @@ func newInstallCommand() *cobra.Command {
 			return installRemote(ctx, remote, self, force, cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine on which to install or update")
+	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine on which to install or repair")
+	cmd.Flags().BoolVar(&force, "force", false, "Install even when the remote version is newer")
+	return cmd
+}
+
+func newUpdateCommand() *cobra.Command {
+	var remote string
+	var force bool
+	cmd := &cobra.Command{
+		Use:   "update [flags]",
+		Short: "Update omaquery and its Omarchy prompt to the latest release",
+		Long: "Check for the latest omaquery release and install it together with the\n" +
+			"matching prompt plugin. Use --remote to update another Omarchy machine.\n" +
+			"Use install instead to reinstall the version already on this machine.",
+		Example: "  omaquery update\n  omaquery update --remote laptop",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if remote != "" && !validTarget(remote) {
+				return errors.New("remote must be an SSH host or user@host without options")
+			}
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			return update(ctx, remote, force, cmd.OutOrStdout(), cmd.ErrOrStderr())
+		},
+	}
+	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine on which to update")
 	cmd.Flags().BoolVar(&force, "force", false, "Update even when the remote version is newer")
 	return cmd
 }

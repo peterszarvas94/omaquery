@@ -17,22 +17,24 @@ Help and version still work elsewhere.
 
 ## Install
 
-Install the CLI:
+Install the CLI and its prompt plugin:
 
 ```sh
 omarchy pkg add go
 go install github.com/peterszarvas94/omaquery/cmd/omaquery@latest
-```
-
-Then install or update the prompt plugin:
-
-```sh
 omaquery install
 ```
 
-`omaquery install` writes the matching plugin version, validates it, enables it,
-and restarts the Omarchy shell when updating an already-enabled plugin. It is
-safe to rerun after a new release. Keep `~/.local/bin` on `PATH`.
+Or do the fresh install in one command:
+
+```sh
+go run github.com/peterszarvas94/omaquery/cmd/omaquery@latest install
+```
+
+`omaquery install` installs the version you are running and writes the matching
+plugin. It validates and enables the plugin, restarts the Omarchy shell when
+updating an already-enabled plugin, and is safe to rerun. It does not fetch a
+newer release. Keep `~/.local/bin` on `PATH`.
 
 The marketplace plugin install only installs the Quickshell service. The
 service still needs the matching CLI; run the commands above after installing
@@ -40,19 +42,27 @@ from the marketplace. `omaquery install` creates and enables the service when
 needed. If the plugin came from the plugin manager, the CLI takes over its
 updates so there is only one installed version.
 
-### Another machine
+## Update
 
-Install or update on another Omarchy machine from this one:
+Check for and install the latest release, together with its matching plugin:
 
 ```sh
-omaquery install --remote laptop
+omaquery update
 ```
 
-The command checks that the target is Omarchy, verifies its architecture and
-version, uploads the current CLI over SSH, and updates the plugin there. Use
-`--force` only when the remote has a newer version and you intentionally want to
-replace it. Local and remote installs, updates, and removals finish with an
-Omarchy notification when the desktop session is reachable.
+`omaquery update` fetches and runs the latest release. For another Omarchy
+machine:
+
+```sh
+omaquery update --remote laptop
+```
+
+Local and remote installs, updates, and removals finish with an Omarchy
+notification when the desktop session is reachable.
+
+Binaries older than `v0.7.0` cannot self-update. Bootstrap them once with
+`go install github.com/peterszarvas94/omaquery/cmd/omaquery@latest` followed by
+`omaquery install`, or with the single `go run` command above.
 
 ### From a checkout
 
