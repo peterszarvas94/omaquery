@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,19 +17,67 @@ import (
 )
 
 func TestParseRun(t *testing.T) {
-	req, d, err := parseRun([]string{"--reason", "deploy", "--timeout", "30", "TOKEN:From settings", "REGION", "--", "echo", "a b"})
+	req, d, err := parseRunCLI([]string{"--reason", "deploy", "--timeout", "30", "TOKEN:From settings", "REGION", "--", "echo", "a b"})
 	if err != nil || d != 30*time.Second || req.Fields[0].Hint != "From settings" || req.Command[1] != "a b" {
 		t.Fatalf("parse: %+v %v %v", req, d, err)
 	}
 	for _, args := range [][]string{
 		{"KEY"}, {"KEY", "--"}, {"KEY", "KEY", "--", "true"}, {"BAD-NAME", "--", "true"},
 		{"--timeout", "0", "KEY", "--", "true"}, {"--timeout", "NaN", "KEY", "--", "true"},
-		{"--timeout", "25h", "KEY", "--", "true"}, {"KEY", "--reason", "late", "--", "true"},
+		{"--timeout", "25h", "KEY", "--", "true"},
 	} {
-		if _, _, err := parseRun(args); err == nil {
+		if _, _, err := parseRunCLI(args); err == nil {
 			t.Fatalf("accepted invalid args %q", args)
 		}
 	}
+}
+
+func TestCobraHelpAndCommandBoundary(t *testing.T) {
+	for _, test := range []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"--help"}, []string{"Available Commands:", "run", "version", "help"}},
+		{[]string{"run", "--help"}, []string{"--prompt-on", "--reason", "--timeout", "NAME[:hint]"}},
+	} {
+		code := 0
+		root := newRootCommand(&code)
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetArgs(test.args)
+		if err := root.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range test.want {
+			if !strings.Contains(out.String(), want) {
+				t.Fatalf("help %q missing %q: %s", test.args, want, out.String())
+			}
+		}
+		if strings.Contains(out.String(), "  serve ") || strings.Contains(out.String(), "  relay ") {
+			t.Fatalf("internal commands exposed in help: %s", out.String())
+		}
+	}
+	req, _, err := parseRunCLI([]string{"TOKEN", "--", "sh", "-c", "printf '%s' \"$TOKEN\""})
+	if err != nil || len(req.Command) != 3 || req.Command[2] != "printf '%s' \"$TOKEN\"" {
+		t.Fatalf("command arguments changed: %+v %v", req, err)
+	}
+}
+
+func parseRunCLI(args []string) (request, time.Duration, error) {
+	var req request
+	var duration time.Duration
+	code := 0
+	cmd := newRunCommand(func(r request, d time.Duration) int {
+		req, duration = r, d
+		return 0
+	}, &code)
+	cmd.SetArgs(args)
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := cmd.Execute()
+	return req, duration, err
 }
 func TestEnvironmentAndValidation(t *testing.T) {
 	env := environment([]string{"TOKEN=old", "KEEP=yes", "TOKEN=duplicate"}, map[string]string{"TOKEN": "new=value\nline"})

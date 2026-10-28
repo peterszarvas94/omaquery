@@ -29,8 +29,8 @@ After a manual plugin update, run `omarchy restart shell`.
 | Command | Purpose |
 | --- | --- |
 | `omaquery run [options] NAME[:hint] ... -- COMMAND [ARG ...]` | Prompt for values and run a command with them in its environment. |
-| `omaquery version` | Print the version. |
-| `omaquery help` or `omaquery --help` | Show CLI help. |
+| `omaquery version` or `omaquery --version` | Print the version. |
+| `omaquery help`, `omaquery --help`, or `omaquery run --help` | Show Cobra help. |
 
 `run` options: `--reason TEXT`, `--timeout 5m` (or seconds), and `--prompt-on SSH_HOST`. Options come before value names. `serve` and `relay` are internal commands used by the popup and SSH transport.
 

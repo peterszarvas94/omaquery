@@ -28,11 +28,11 @@ func TestSSHArgumentsAndTargets(t *testing.T) {
 	if got := sshArgs("desktop"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("ssh args: %q", got)
 	}
-	req, _, err := parseRun([]string{"--prompt-on", "desktop", "TOKEN", "--", "true"})
+	req, _, err := parseRunCLI([]string{"--prompt-on", "desktop", "TOKEN", "--", "true"})
 	if err != nil || req.Target != "desktop" {
 		t.Fatalf("remote parse: %+v %v", req, err)
 	}
-	if _, _, err = parseRun([]string{"--prompt-on", "-oProxyCommand=evil", "TOKEN", "--", "true"}); err == nil {
+	if _, _, err = parseRunCLI([]string{"--prompt-on", "-oProxyCommand=evil", "TOKEN", "--", "true"}); err == nil {
 		t.Fatal("unsafe target accepted by CLI")
 	}
 }

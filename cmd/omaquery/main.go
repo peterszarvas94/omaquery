@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -22,21 +21,6 @@ import (
 )
 
 const maxMessage = 1 << 20
-const help = `omaquery — request secrets through the Omarchy desktop
-
-Usage:
-  omaquery run [--reason TEXT] [--timeout 5m] [--prompt-on SSH_HOST] NAME[:hint] … -- COMMAND [ARG …]
-  omaquery serve                 Private popup bridge (started by the plugin)
-  omaquery version
-
-Options must precede names. Timeout accepts Go durations or seconds and applies
-only to the prompt, including queue time. Escape cancels. Values are passed only
-to the child environment. Command output is forwarded unchanged: commands can
-print their environment, so review the command before approving it.
-
-Exit codes: 1 cancelled, 2 usage/setup/protocol error, 124 prompt timeout;
-otherwise the command's exit status. No dotenv writing or 1Password integration.
-`
 
 type field struct {
 	Name string `json:"name"`
@@ -60,69 +44,18 @@ type response struct {
 
 var namePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-func main() { os.Exit(mainCode(os.Args[1:])) }
-func mainCode(args []string) int {
-	if len(args) == 0 || args[0] == "--help" || args[0] == "help" {
-		fmt.Print(help)
-		return 0
-	}
-	switch args[0] {
-	case "version":
-		fmt.Println("omaquery 0.2.0")
-		return 0
-	case "serve":
-		if len(args) != 1 {
-			return fail(errors.New("serve takes no arguments"))
-		}
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		if err := serve(ctx, os.Stdin, os.Stdout); err != nil {
-			return fail(err)
-		}
-		return 0
-	case "run":
-		return run(args[1:])
-	case "relay":
-		if len(args) != 1 {
-			return fail(errors.New("relay takes no arguments"))
-		}
-		return relay(os.Stdin, os.Stdout)
-	default:
-		return fail(errors.New("unknown command; use omaquery --help"))
-	}
-}
 func fail(err error) int { fmt.Fprintln(os.Stderr, "omaquery:", err); return 2 }
-func parseRun(args []string) (request, time.Duration, error) {
+func parseRun(args []string, sep int, reason, timeout, promptOn string) (request, time.Duration, error) {
 	var req request
-	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	reason := fs.String("reason", "", "reason shown in the popup")
-	timeout := fs.String("timeout", "5m", "prompt timeout")
-	promptOn := fs.String("prompt-on", "", "SSH host on which to show the popup")
-	if err := fs.Parse(args); err != nil {
-		return req, 0, err
-	}
-	duration, err := time.ParseDuration(*timeout)
-	if n, e := strconv.ParseFloat(*timeout, 64); e == nil {
-		duration = time.Duration(n * float64(time.Second))
-		err = nil
-	}
+	duration, err := parseTimeout(timeout)
 	if err != nil || duration <= 0 || duration > 24*time.Hour {
 		return req, 0, errors.New("timeout must be positive and at most 24h")
 	}
-	rest := fs.Args()
-	sep := -1
-	for i, v := range rest {
-		if v == "--" {
-			sep = i
-			break
-		}
-	}
-	if sep < 1 || sep == len(rest)-1 {
-		return req, 0, errors.New("expected NAME[:hint] … -- COMMAND [ARG …] (options before names)")
+	if sep < 1 || sep >= len(args) {
+		return req, 0, errors.New("expected NAME[:hint] … -- COMMAND [ARG …]")
 	}
 	seen := map[string]bool{}
-	for _, spec := range rest[:sep] {
+	for _, spec := range args[:sep] {
 		name, hint, _ := strings.Cut(spec, ":")
 		if !namePattern.MatchString(name) || seen[name] {
 			return req, 0, errors.New("invalid or duplicate environment variable name")
@@ -133,12 +66,12 @@ func parseRun(args []string) (request, time.Duration, error) {
 	if len(req.Fields) > 16 {
 		return req, 0, errors.New("at most 16 fields are supported")
 	}
-	req.Command = rest[sep+1:]
-	req.Reason = *reason
-	if *promptOn != "" && !validTarget(*promptOn) {
+	req.Command = args[sep:]
+	req.Reason = reason
+	if promptOn != "" && !validTarget(promptOn) {
 		return req, 0, errors.New("prompt-on must be an SSH host or user@host without options")
 	}
-	req.Target = *promptOn
+	req.Target = promptOn
 	req.Cwd, err = os.Getwd()
 	if err != nil {
 		return req, 0, err
@@ -149,15 +82,8 @@ func parseRun(args []string) (request, time.Duration, error) {
 	}
 	return req, duration, nil
 }
-func run(args []string) int {
-	if len(args) == 1 && args[0] == "--help" {
-		fmt.Print(help)
-		return 0
-	}
-	req, duration, err := parseRun(args)
-	if err != nil {
-		return fail(err)
-	}
+func runRequest(req request, duration time.Duration) int {
+	var err error
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	promptCtx, cancel := context.WithTimeout(ctx, duration)
