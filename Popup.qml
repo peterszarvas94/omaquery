@@ -6,13 +6,14 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons as Commons
+import qs.Ui as Ui
 
 Item {
     id: root
     property var request: null
     property bool submitting: false
-    property bool focusPrimed: false
     readonly property bool opened: request !== null
+    readonly property int cardPadding: Commons.Style.spacing.panelPadding
 
     function clear() {
         for (var i = 0; i < fields.count; i++) {
@@ -21,7 +22,6 @@ Item {
         }
         request = null
         submitting = false
-        focusPrimed = false
     }
     function reply(cancelled) {
         if (!request || submitting) return
@@ -57,6 +57,7 @@ Item {
     function focusFirst() {
         if (opened && fields.count > 0 && fields.itemAt(0)) fields.itemAt(0).focusInput()
     }
+    Keys.onEscapePressed: reply(true)
     Process {
         id: bridge
         command: ["omaquery", "serve"]
@@ -72,102 +73,155 @@ Item {
     Timer {
         id: focusTimer
         interval: 100
-        onTriggered: {
-            root.focusFirst()
-            root.focusPrimed = true
-        }
+        onTriggered: root.focusFirst()
     }
     PanelWindow {
         id: panel
         visible: root.opened
         screen: Quickshell.screens.find(s => Hyprland.focusedMonitor && s.name === Hyprland.focusedMonitor.name) || Quickshell.screens[0]
-        implicitWidth: Math.min(560, screen ? screen.width - 48 : 560)
-        implicitHeight: Math.min(content.implicitHeight + 48, screen ? screen.height - 80 : 700)
+        implicitWidth: Math.min(Commons.Style.space(560), screen ? screen.width - Commons.Style.space(48) : Commons.Style.space(560))
+        readonly property int contentInset: root.cardPadding + 2
+        implicitHeight: Math.min(content.implicitHeight + contentInset * 2 + Commons.Style.spacing.xxl, screen ? screen.height - Commons.Style.space(80) : Commons.Style.space(700))
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.namespace: "omaquery"
         WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: !root.opened ? WlrKeyboardFocus.None :
-            (root.focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
+        WlrLayershell.keyboardFocus: root.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
         onBackingWindowVisibleChanged: if (backingWindowVisible) focusTimer.restart()
 
-        Rectangle {
+        Ui.BorderSurface {
+            id: card
             anchors.fill: parent
             radius: Commons.Style.cornerRadius
             color: Commons.Color.popups.background
-            border.color: Commons.Color.accent
-            border.width: 1
+            borderSpec: Commons.Border.surfaceSpec("popups", "border", Commons.Color.popups.border, Math.max(1, Commons.Style.space(2)))
+
             ScrollView {
                 id: scroll
                 anchors.fill: parent
-                anchors.margins: 24
+                anchors.margins: panel.contentInset
                 clip: true
                 contentWidth: availableWidth
+                contentHeight: content.implicitHeight
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
                 ColumnLayout {
                     id: content
                     width: scroll.availableWidth
-                    spacing: 14
-                    Keys.onEscapePressed: root.reply(true)
-                    Label {
-                        text: "omaquery"
-                        font.family: Commons.Style.font.menuFamily
-                        font.pixelSize: 22
-                        font.bold: true
-                        color: Commons.Color.foreground
+                    spacing: Commons.Style.spacing.panelGap
+
+                    Ui.PanelHero {
+                        Layout.fillWidth: true
+                        title: "omaquery"
+                        meta: "Command environment values"
+                        detail: root.request && root.request.origin ? "Remote" : "Local"
+                        iconComponent: Component {
+                            Text {
+                                text: "\uf023"
+                                color: Commons.Color.accent
+                                font.family: Commons.Style.font.menuFamily
+                                font.pixelSize: Commons.Style.font.iconLarge
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                        }
                     }
-                    Label {
-                        text: "A command is requesting environment values"
+
+                    Ui.PanelSeparator { Layout.fillWidth: true }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "A command is requesting values for its environment."
+                        textFormat: Text.PlainText
                         color: Commons.Color.muted
                         wrapMode: Text.Wrap
-                        Layout.fillWidth: true
+                        font.family: Commons.Style.font.family
+                        font.pixelSize: Commons.Style.font.body
                     }
-                    Label {
+
+                    Text {
                         visible: !!root.request && !!root.request.origin
+                        Layout.fillWidth: true
                         text: root.request && root.request.origin ? "Remote request from " + root.request.origin : ""
                         textFormat: Text.PlainText
                         color: Commons.Color.accent
                         wrapMode: Text.WrapAnywhere
-                        Layout.fillWidth: true
+                        font.family: Commons.Style.font.family
+                        font.pixelSize: Commons.Style.font.bodySmall
                     }
-                    Rectangle {
+
+                    Ui.BorderSurface {
                         Layout.fillWidth: true
-                        implicitHeight: details.implicitHeight + 24
-                        radius: 8
-                        color: Commons.Color.background
-                        border.color: Commons.Color.muted
+                        implicitHeight: details.implicitHeight + Commons.Style.spacing.xxl * 2
+                        color: Commons.Style.normalFillFor(Commons.Color.foreground, Commons.Color.accent)
+                        borderSpec: Commons.Border.controlSpec("normal", Commons.Color.foreground, Commons.Color.accent)
+                        radius: Commons.Style.cornerRadius
+
                         ColumnLayout {
                             id: details
                             anchors.fill: parent
-                            anchors.margins: 12
-                            spacing: 8
-                            Label {
+                            anchors.margins: Commons.Style.spacing.xxl
+                            spacing: Commons.Style.spacing.sm
+
+                            Ui.PanelSectionHeader {
+                                text: "WORKING DIRECTORY"
+                                foreground: Commons.Color.foreground
+                                fontFamily: Commons.Style.font.family
+                            }
+                            Text {
+                                Layout.fillWidth: true
                                 text: root.request ? root.request.cwd : ""
                                 textFormat: Text.PlainText
                                 color: Commons.Color.muted
                                 wrapMode: Text.WrapAnywhere
-                                Layout.fillWidth: true
+                                font.family: Commons.Style.font.family
+                                font.pixelSize: Commons.Style.font.bodySmall
                             }
-                            Label {
+                            Ui.PanelSectionHeader {
+                                text: "COMMAND"
+                                foreground: Commons.Color.foreground
+                                fontFamily: Commons.Style.font.family
+                            }
+                            Text {
+                                Layout.fillWidth: true
                                 // JSON quoting makes argument boundaries visible,
                                 // including whitespace, newlines, and shell syntax.
                                 text: root.request ? root.request.command.map(a => JSON.stringify(a)).join(" ") : ""
                                 textFormat: Text.PlainText
-                                font.family: "monospace"
                                 color: Commons.Color.foreground
                                 wrapMode: Text.WrapAnywhere
-                                Layout.fillWidth: true
+                                font.family: Commons.Style.font.family
+                                font.pixelSize: Commons.Style.font.body
                             }
                         }
                     }
-                    Label {
-                        visible: text.length > 0
-                        text: root.request ? root.request.reason || "" : ""
-                        textFormat: Text.PlainText
-                        color: Commons.Color.foreground
-                        wrapMode: Text.Wrap
+
+                    ColumnLayout {
+                        visible: !!root.request && !!(root.request.reason || "")
                         Layout.fillWidth: true
+                        spacing: Commons.Style.spacing.labelGap
+
+                        Ui.PanelSectionHeader {
+                            text: "REASON"
+                            foreground: Commons.Color.foreground
+                            fontFamily: Commons.Style.font.family
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: root.request ? root.request.reason || "" : ""
+                            textFormat: Text.PlainText
+                            color: Commons.Color.foreground
+                            wrapMode: Text.Wrap
+                            font.family: Commons.Style.font.family
+                            font.pixelSize: Commons.Style.font.body
+                        }
                     }
+
+                    Ui.PanelSeparator {
+                        Layout.fillWidth: true
+                        visible: fields.count > 0
+                    }
+
                     Repeater {
                         id: fields
                         model: root.request ? root.request.fields : []
@@ -176,89 +230,93 @@ Item {
                             required property var modelData
                             required property int index
                             property alias value: input.text
+                            property bool revealed: false
                             Layout.fillWidth: true
-                            spacing: 6
-                            function clear() { input.text = ""; reveal.checked = false }
+                            spacing: Commons.Style.spacing.labelGap
+                            function clear() { input.text = ""; revealed = false }
                             function focusInput() { input.forceActiveFocus() }
-                            Label {
+                            Ui.PanelSectionHeader {
                                 text: fieldRow.modelData.name
-                                textFormat: Text.PlainText
-                                font.family: "monospace"
-                                font.bold: true
-                                color: Commons.Color.foreground
+                                foreground: Commons.Color.foreground
+                                fontFamily: Commons.Style.font.family
                             }
-                            Label {
+                            Text {
                                 visible: text.length > 0
+                                Layout.fillWidth: true
                                 text: fieldRow.modelData.hint || ""
                                 textFormat: Text.PlainText
                                 color: Commons.Color.muted
                                 wrapMode: Text.Wrap
-                                Layout.fillWidth: true
+                                font.family: Commons.Style.font.family
+                                font.pixelSize: Commons.Style.font.bodySmall
                             }
                             RowLayout {
                                 Layout.fillWidth: true
-                                TextField {
+                                spacing: Commons.Style.spacing.controlGap
+                                Ui.TextField {
                                     id: input
                                     Layout.fillWidth: true
                                     enabled: !root.submitting
-                                    echoMode: reveal.checked ? TextInput.Normal : TextInput.Password
-                                    passwordMaskDelay: 0
-                                    selectByMouse: true
+                                    password: !fieldRow.revealed
                                     placeholderText: "Enter or paste value"
-                                    color: Commons.Color.foreground
-                                    placeholderTextColor: Commons.Color.muted
-                                    selectionColor: Commons.Color.accent
-                                    selectedTextColor: Commons.Color.background
-                                    inputMethodHints: Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
-                                    padding: 12
-                                    background: Rectangle {
-                                        radius: 6
-                                        color: Commons.Color.background
-                                        border.width: input.activeFocus ? 2 : 1
-                                        border.color: input.activeFocus ? Commons.Color.accent : Commons.Color.muted
-                                    }
+                                    foreground: Commons.Color.foreground
+                                    accent: Commons.Color.accent
+                                    font.family: Commons.Style.font.family
+                                    font.pixelSize: Commons.Style.font.body
+                                    inputMethodHints: fieldRow.revealed
+                                        ? Qt.ImhNoPredictiveText
+                                        : (Qt.ImhHiddenText | Qt.ImhSensitiveData | Qt.ImhNoPredictiveText)
                                     onAccepted: {
                                         if (fieldRow.index + 1 < fields.count) fields.itemAt(fieldRow.index + 1).focusInput()
                                         else root.reply(false)
                                     }
                                     Keys.onEscapePressed: root.reply(true)
                                 }
-                                CheckBox {
-                                    id: reveal
-                                    text: "Show"
+                                Ui.Button {
+                                    text: fieldRow.revealed ? "Hide" : "Show"
+                                    focusable: true
+                                    bordered: true
+                                    tooltipText: fieldRow.revealed ? "Hide this value" : "Show this value"
                                     enabled: !root.submitting
-                                    palette.windowText: Commons.Color.foreground
+                                    onClicked: fieldRow.revealed = !fieldRow.revealed
                                     Keys.onEscapePressed: root.reply(true)
                                 }
                             }
                         }
                     }
-                    Label {
+
+                    Text {
                         Layout.fillWidth: true
                         text: "Values go to this command. Its output may expose them."
                         color: Commons.Color.muted
                         wrapMode: Text.Wrap
-                        font.pixelSize: 12
+                        font.family: Commons.Style.font.family
+                        font.pixelSize: Commons.Style.font.caption
                     }
+
                     RowLayout {
                         Layout.fillWidth: true
-                        Button {
-                            text: "Cancel · Esc"
+                        spacing: Commons.Style.spacing.controlGap
+                        Ui.Button {
+                            text: "Cancel"
+                            focusable: true
+                            bordered: true
                             enabled: !root.submitting
                             onClicked: root.reply(true)
                             Keys.onEscapePressed: root.reply(true)
                         }
                         Item { Layout.fillWidth: true }
-                        Button {
+                        Ui.Button {
                             text: root.submitting ? "Submitting…" : "Run command"
+                            focusable: true
+                            bordered: true
+                            active: true
                             enabled: !root.submitting
-                            highlighted: true
-                            palette.highlight: Commons.Color.accent
-                            palette.highlightedText: Commons.Color.background
                             onClicked: root.reply(false)
                             Keys.onEscapePressed: root.reply(true)
                         }
                     }
+
                 }
             }
         }
