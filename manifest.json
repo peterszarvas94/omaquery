@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "omaquery.prompt",
+  "name": "omaquery",
+  "version": "0.2.0",
+  "author": "omaquery contributors",
+  "description": "Desktop prompts for command environment values.",
+  "kinds": ["service"],
+  "keepLoaded": true,
+  "entryPoints": { "service": "Popup.qml" }
+}
