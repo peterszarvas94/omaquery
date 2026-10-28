@@ -41,12 +41,16 @@ func TestUninstallLocalRemovesPluginAndBinary(t *testing.T) {
 	}
 
 	var calls []string
+	var notices []string
 	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		calls = append(calls, name+" "+strings.Join(args, " "))
 		if name == "omarchy" && len(args) == 4 && args[0] == "plugin" && args[1] == "remove" {
 			return nil, os.RemoveAll(filepath.Join(pluginRoot, args[2]))
 		}
 		return nil, nil
+	})
+	stubNotification(t, func(_ []string, summary, _ string) {
+		notices = append(notices, summary)
 	})
 
 	var out bytes.Buffer
@@ -63,6 +67,9 @@ func TestUninstallLocalRemovesPluginAndBinary(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "Removed omaquery") {
 		t.Fatalf("output: %s", out.String())
+	}
+	if len(notices) != 1 || notices[0] != "omaquery removed" {
+		t.Fatalf("notifications: %v", notices)
 	}
 	joined := strings.Join(calls, "\n")
 	for _, id := range append([]string{bundle.ID}, legacyPluginIDs...) {

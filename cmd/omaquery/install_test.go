@@ -17,10 +17,24 @@ import (
 func stubInstallCommand(t *testing.T, handler func([]string, string, ...string) ([]byte, error)) {
 	t.Helper()
 	previous := runInstallCommand
+	previousNotification := sendNotification
 	runInstallCommand = func(_ context.Context, env []string, name string, args ...string) ([]byte, error) {
 		return handler(env, name, args...)
 	}
-	t.Cleanup(func() { runInstallCommand = previous })
+	sendNotification = func(context.Context, []string, string, string) {}
+	t.Cleanup(func() {
+		runInstallCommand = previous
+		sendNotification = previousNotification
+	})
+}
+
+func stubNotification(t *testing.T, handler func([]string, string, string)) {
+	t.Helper()
+	previous := sendNotification
+	sendNotification = func(_ context.Context, env []string, summary, body string) {
+		handler(env, summary, body)
+	}
+	t.Cleanup(func() { sendNotification = previous })
 }
 
 func TestInstallLocalAndUpdate(t *testing.T) {
@@ -28,17 +42,21 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	source := filepath.Join(home, "source")
-	if err := os.WriteFile(source, []byte("binary-v0.5.0"), 0755); err != nil {
+	if err := os.WriteFile(source, []byte("binary-v0.6.0"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
 	var calls []string
+	var notices []string
 	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		calls = append(calls, name+" "+strings.Join(args, " "))
 		if name == "omarchy" && len(args) == 3 && args[0] == "plugin" && args[1] == "list" {
 			return []byte("[]"), nil
 		}
 		return nil, nil
+	})
+	stubNotification(t, func(_ []string, summary, _ string) {
+		notices = append(notices, summary)
 	})
 
 	var out bytes.Buffer
@@ -50,7 +68,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	binaryPath := filepath.Join(home, ".local", "bin", "omaquery")
-	if data, err := os.ReadFile(binaryPath); err != nil || string(data) != "binary-v0.5.0" {
+	if data, err := os.ReadFile(binaryPath); err != nil || string(data) != "binary-v0.6.0" {
 		t.Fatalf("installed binary: %q %v", data, err)
 	}
 	if info, err := os.Stat(binaryPath); err != nil || info.Mode().Perm() != 0755 {
@@ -75,20 +93,27 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	if strings.Contains(joined, "omarchy restart shell") {
 		t.Fatal("fresh install restarted the shell")
 	}
-	if !strings.Contains(out.String(), "Installed omaquery 0.5.0") {
+	if !strings.Contains(out.String(), "Installed omaquery 0.6.0") {
 		t.Fatalf("output: %s", out.String())
+	}
+	if len(notices) != 1 || notices[0] != "omaquery installed" {
+		t.Fatalf("notifications: %v", notices)
 	}
 
 	if err := os.WriteFile(filepath.Join(pluginDir, "manifest.json"), []byte(`{"id":"`+bundle.ID+`","version":"0.2.0"}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	calls = nil
+	notices = nil
 	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
 		calls = append(calls, name+" "+strings.Join(args, " "))
 		if name == "omarchy" && len(args) == 3 && args[0] == "plugin" && args[1] == "list" {
 			return []byte(`[{"id":"` + bundle.ID + `","enabled":true}]`), nil
 		}
 		return nil, nil
+	})
+	stubNotification(t, func(_ []string, summary, _ string) {
+		notices = append(notices, summary)
 	})
 	out.Reset()
 	if err := installLocal(context.Background(), source, &out); err != nil {
@@ -97,8 +122,11 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	if !strings.Contains(strings.Join(calls, "\n"), "omarchy restart shell") {
 		t.Fatal("update did not restart the shell")
 	}
-	if !strings.Contains(out.String(), "Updated omaquery 0.2.0 -> 0.5.0") {
+	if !strings.Contains(out.String(), "Updated omaquery 0.2.0 -> 0.6.0") {
 		t.Fatalf("output: %s", out.String())
+	}
+	if len(notices) != 1 || notices[0] != "omaquery updated" {
+		t.Fatalf("notifications: %v", notices)
 	}
 }
 
@@ -130,6 +158,9 @@ func TestInstallEnvironmentKeepsDesktopSettings(t *testing.T) {
 	}
 	if values["XDG_RUNTIME_DIR"] != "/run/user/"+strconv.Itoa(os.Getuid()) {
 		t.Fatalf("XDG_RUNTIME_DIR: %q", values["XDG_RUNTIME_DIR"])
+	}
+	if values["DBUS_SESSION_BUS_ADDRESS"] != "unix:path=/run/user/"+strconv.Itoa(os.Getuid())+"/bus" {
+		t.Fatalf("DBUS_SESSION_BUS_ADDRESS: %q", values["DBUS_SESSION_BUS_ADDRESS"])
 	}
 	if values["LANG"] != "C.UTF-8" || values["LC_ALL"] != "C.UTF-8" {
 		t.Fatalf("locale: LANG=%q LC_ALL=%q", values["LANG"], values["LC_ALL"])
@@ -303,7 +334,7 @@ func TestInstallRemoteOlderAndNewer(t *testing.T) {
 	if err := installRemote(context.Background(), "laptop", source, false, &out); err != nil {
 		t.Fatal(err)
 	}
-	if uploads != 1 || !strings.Contains(out.String(), "0.2.0 -> 0.5.0") || !strings.Contains(out.String(), "remote install output") {
+	if uploads != 1 || !strings.Contains(out.String(), "0.2.0 -> 0.6.0") || !strings.Contains(out.String(), "remote install output") {
 		t.Fatalf("uploads=%d output=%q", uploads, out.String())
 	}
 

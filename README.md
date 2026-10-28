@@ -51,7 +51,8 @@ omaquery install --remote laptop
 The command checks that the target is Omarchy, verifies its architecture and
 version, uploads the current CLI over SSH, and updates the plugin there. Use
 `--force` only when the remote has a newer version and you intentionally want to
-replace it.
+replace it. Local and remote installs, updates, and removals finish with an
+Omarchy notification when the desktop session is reachable.
 
 ### From a checkout
 

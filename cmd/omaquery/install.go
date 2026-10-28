@@ -72,6 +72,9 @@ func installEnvironment(ctx context.Context) ([]string, error) {
 	if value("XDG_RUNTIME_DIR") == "" {
 		set("XDG_RUNTIME_DIR", fmt.Sprintf("/run/user/%d", os.Getuid()))
 	}
+	if value("DBUS_SESSION_BUS_ADDRESS") == "" {
+		set("DBUS_SESSION_BUS_ADDRESS", "unix:path="+value("XDG_RUNTIME_DIR")+"/bus")
+	}
 	// SSH sessions commonly default to the C locale. Qt then prints a warning
 	// on stdout, which corrupts the JSON that omarchy's plugin commands parse.
 	for _, key := range []string{"LANG", "LC_ALL"} {
@@ -366,6 +369,11 @@ func installLocal(ctx context.Context, executable string, out io.Writer) error {
 		fmt.Fprintf(out, "%s omaquery %s\n", action, bundle.Version)
 	}
 	fmt.Fprintf(out, "Binary: %s\nPlugin: %s\n", binaryPath, pluginDir)
+	title := "omaquery installed"
+	if previousVersion != "" {
+		title = "omaquery updated"
+	}
+	sendNotification(ctx, env, title, fmt.Sprintf("Version %s is ready.", bundle.Version))
 	return nil
 }
 

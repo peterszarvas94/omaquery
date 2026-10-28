@@ -49,8 +49,11 @@ func uninstallLocal(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	binaryRemoved := false
 	if err := os.Remove(binaryPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove %s: %w", binaryPath, err)
+	} else if err == nil {
+		binaryRemoved = true
 	}
 	if removed {
 		fmt.Fprintln(out, "Removed omaquery")
@@ -58,6 +61,9 @@ func uninstallLocal(ctx context.Context, out io.Writer) error {
 		fmt.Fprintln(out, "omaquery was not installed")
 	}
 	fmt.Fprintf(out, "Binary: %s\n", binaryPath)
+	if removed || binaryRemoved {
+		sendNotification(ctx, env, "omaquery removed", "The prompt service and CLI were removed.")
+	}
 	return nil
 }
 
