@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 func main() { os.Exit(mainCode(os.Args[1:])) }
 
@@ -47,6 +47,7 @@ func newRootCommand(code *int) *cobra.Command {
 		return runRequest(req, duration)
 	}, code))
 	root.AddCommand(newInstallCommand())
+	root.AddCommand(newUninstallCommand())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print the version",
@@ -112,6 +113,22 @@ func newInstallCommand() *cobra.Command {
 	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine on which to install or update")
 	cmd.Flags().BoolVar(&force, "force", false, "Update even when the remote version is newer")
 	return cmd
+}
+
+func newUninstallCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "uninstall",
+		Short: "Remove omaquery and its Omarchy prompt",
+		Long: "Remove the prompt plugin, then delete the installed omaquery binary.\n" +
+			"The plugin is removed first so a failed uninstall can be retried.",
+		Example: "  omaquery uninstall\n  ssh laptop omaquery uninstall",
+		Args:    cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			return uninstallLocal(ctx, cmd.OutOrStdout())
+		},
+	}
 }
 
 func newRunCommand(execute func(request, time.Duration) int, code *int) *cobra.Command {

@@ -66,12 +66,18 @@ make install
 On each machine with the prompt installed:
 
 ```sh
-omarchy plugin remove io.github.peterszarvas94.omaquery --yes
-rm -f ~/.local/bin/omaquery
+omaquery uninstall
 ```
 
-Removing the `omaquery` binary also disables local and remote prompts. No
-secrets or other persistent files are kept by the application.
+The command removes the plugin first, then deletes the installed binary, so a
+partial failure leaves the CLI available to retry. For another machine:
+
+```sh
+ssh laptop omaquery uninstall
+```
+
+Removing the `omaquery` binary disables local and remote prompts. No secrets or
+other persistent files are kept by the application.
 
 ## Usage
 

@@ -222,34 +222,68 @@ func enablePlugin(ctx context.Context, env []string, id string) error {
 	return nil
 }
 
+func removePluginFiles(id string) (bool, error) {
+	dir, err := pluginInstallDir(id)
+	if err != nil {
+		return false, err
+	}
+	_, statErr := os.Stat(dir)
+	removed := statErr == nil
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return false, statErr
+	}
+	if removed {
+		if err := os.RemoveAll(dir); err != nil {
+			return removed, fmt.Errorf("remove plugin %s: %w", id, err)
+		}
+	}
+	backups, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), "."+id+".bak.*"))
+	for _, backup := range backups {
+		if err := os.RemoveAll(backup); err != nil {
+			return removed, err
+		}
+		removed = true
+	}
+	return removed, nil
+}
+
+// removePlugin uses Omarchy's own removal path so the shell journal and config
+// are updated. If the id is no longer known, removing its files and rescanning
+// still gets rid of a stale service.
+func removePlugin(ctx context.Context, env []string, id string) (removed, fallback bool, err error) {
+	dir, err := pluginInstallDir(id)
+	if err != nil {
+		return false, false, err
+	}
+	if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+		_, _ = removePluginFiles(id)
+		return false, false, nil
+	}
+	if _, removeErr := runInstallCommand(ctx, env, "omarchy", "plugin", "remove", id, "--yes"); removeErr == nil {
+		_, _ = removePluginFiles(id)
+		return true, false, nil
+	}
+	removed, err = removePluginFiles(id)
+	if err != nil {
+		return removed, true, err
+	}
+	if _, err := runInstallCommand(ctx, env, "omarchy-shell", "shell", "rescanPlugins"); err != nil {
+		return removed, true, err
+	}
+	return removed, true, nil
+}
+
 func removeLegacyPlugins(ctx context.Context, env []string, currentID string) (bool, error) {
 	removed := false
 	for _, id := range legacyPluginIDs {
 		if id == currentID {
 			continue
 		}
-		dir, err := pluginInstallDir(id)
+		pluginRemoved, _, err := removePlugin(ctx, env, id)
 		if err != nil {
 			return removed, err
 		}
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			continue
-		}
-		removed = true
-		if _, err := runInstallCommand(ctx, env, "omarchy", "plugin", "remove", id, "--yes"); err != nil {
-			// The old id may no longer be known to the shell. Remove its files
-			// and refresh discovery rather than leaving a second service behind.
-			if err := os.RemoveAll(dir); err != nil {
-				return removed, fmt.Errorf("remove legacy plugin %s: %w", id, err)
-			}
-			if _, err := runInstallCommand(ctx, env, "omarchy-shell", "shell", "rescanPlugins"); err != nil {
-				return removed, err
-			}
-		}
-		backups, _ := filepath.Glob(filepath.Join(filepath.Dir(dir), "."+id+".bak.*"))
-		for _, backup := range backups {
-			_ = os.RemoveAll(backup)
-		}
+		removed = removed || pluginRemoved
 	}
 	return removed, nil
 }

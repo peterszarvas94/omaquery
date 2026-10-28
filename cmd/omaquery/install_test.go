@@ -28,7 +28,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
 	source := filepath.Join(home, "source")
-	if err := os.WriteFile(source, []byte("binary-v0.4.0"), 0755); err != nil {
+	if err := os.WriteFile(source, []byte("binary-v0.5.0"), 0755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -50,7 +50,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	binaryPath := filepath.Join(home, ".local", "bin", "omaquery")
-	if data, err := os.ReadFile(binaryPath); err != nil || string(data) != "binary-v0.4.0" {
+	if data, err := os.ReadFile(binaryPath); err != nil || string(data) != "binary-v0.5.0" {
 		t.Fatalf("installed binary: %q %v", data, err)
 	}
 	if info, err := os.Stat(binaryPath); err != nil || info.Mode().Perm() != 0755 {
@@ -75,7 +75,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	if strings.Contains(joined, "omarchy restart shell") {
 		t.Fatal("fresh install restarted the shell")
 	}
-	if !strings.Contains(out.String(), "Installed omaquery 0.4.0") {
+	if !strings.Contains(out.String(), "Installed omaquery 0.5.0") {
 		t.Fatalf("output: %s", out.String())
 	}
 
@@ -97,7 +97,7 @@ func TestInstallLocalAndUpdate(t *testing.T) {
 	if !strings.Contains(strings.Join(calls, "\n"), "omarchy restart shell") {
 		t.Fatal("update did not restart the shell")
 	}
-	if !strings.Contains(out.String(), "Updated omaquery 0.2.0 -> 0.4.0") {
+	if !strings.Contains(out.String(), "Updated omaquery 0.2.0 -> 0.5.0") {
 		t.Fatalf("output: %s", out.String())
 	}
 }
@@ -303,7 +303,7 @@ func TestInstallRemoteOlderAndNewer(t *testing.T) {
 	if err := installRemote(context.Background(), "laptop", source, false, &out); err != nil {
 		t.Fatal(err)
 	}
-	if uploads != 1 || !strings.Contains(out.String(), "0.2.0 -> 0.4.0") || !strings.Contains(out.String(), "remote install output") {
+	if uploads != 1 || !strings.Contains(out.String(), "0.2.0 -> 0.5.0") || !strings.Contains(out.String(), "remote install output") {
 		t.Fatalf("uploads=%d output=%q", uploads, out.String())
 	}
 
