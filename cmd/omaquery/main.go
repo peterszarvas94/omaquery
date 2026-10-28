@@ -83,6 +83,9 @@ func parseRun(args []string, sep int, reason, timeout, promptOn string) (request
 	return req, duration, nil
 }
 func runRequest(req request, duration time.Duration) int {
+	if err := requireOmarchy(); err != nil {
+		return fail(err)
+	}
 	var err error
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

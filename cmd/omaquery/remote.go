@@ -140,6 +140,12 @@ func relay(input io.Reader, output io.Writer) int {
 	if len(connection) != 4 || net.ParseIP(connection[0]) == nil {
 		return fail(errors.New("relay requires an SSH session"))
 	}
+	if err := requireOmarchy(); err != nil {
+		if encodeErr := json.NewEncoder(output).Encode(relayResponse{Type: "result", Error: err.Error()}); encodeErr != nil {
+			return fail(encodeErr)
+		}
+		return 0
+	}
 	data, err := io.ReadAll(io.LimitReader(input, maxMessage+1))
 	if err != nil || len(data) > maxMessage {
 		return fail(errors.New("invalid or oversized relay request"))

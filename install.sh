@@ -9,6 +9,10 @@ binary="${HOME}/.local/bin/omaquery"
 
 die() { printf 'omaquery install: %s\n' "$*" >&2; exit 1; }
 
+[[ -r /etc/os-release ]] || die 'requires an Omarchy machine'
+. /etc/os-release
+[[ ${ID:-} == omarchy ]] || die 'requires an Omarchy machine'
+
 for command in curl tar install omarchy omarchy-shell; do
   command -v "$command" >/dev/null || die "missing $command"
 done

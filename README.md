@@ -2,6 +2,8 @@
 
 `omaquery` asks for values in an Omarchy desktop popup, then passes them to a command as environment variables. It supports local prompts and prompts on another Omarchy machine over ordinary SSH.
 
+Prompting requires Omarchy (`ID=omarchy` in `/etc/os-release`) on both machines. Help and version still work elsewhere.
+
 ## Install
 
 On an Omarchy desktop with Quickshell:
