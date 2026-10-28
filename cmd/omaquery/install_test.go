@@ -111,6 +111,8 @@ func TestInstallEnvironmentKeepsDesktopSettings(t *testing.T) {
 	}
 	t.Setenv("OMARCHY_PATH", path)
 	t.Setenv("XDG_RUNTIME_DIR", "")
+	t.Setenv("LANG", "C")
+	t.Setenv("LC_ALL", "C")
 	env, err := installEnvironment(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -127,6 +129,9 @@ func TestInstallEnvironmentKeepsDesktopSettings(t *testing.T) {
 	}
 	if values["XDG_RUNTIME_DIR"] != "/run/user/"+strconv.Itoa(os.Getuid()) {
 		t.Fatalf("XDG_RUNTIME_DIR: %q", values["XDG_RUNTIME_DIR"])
+	}
+	if values["LANG"] != "C.UTF-8" || values["LC_ALL"] != "C.UTF-8" {
+		t.Fatalf("locale: LANG=%q LC_ALL=%q", values["LANG"], values["LC_ALL"])
 	}
 }
 

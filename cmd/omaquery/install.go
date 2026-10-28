@@ -67,6 +67,14 @@ func installEnvironment(ctx context.Context) ([]string, error) {
 	if value("XDG_RUNTIME_DIR") == "" {
 		set("XDG_RUNTIME_DIR", fmt.Sprintf("/run/user/%d", os.Getuid()))
 	}
+	// SSH sessions commonly default to the C locale. Qt then prints a warning
+	// on stdout, which corrupts the JSON that omarchy's plugin commands parse.
+	for _, key := range []string{"LANG", "LC_ALL"} {
+		locale := value(key)
+		if locale == "" || locale == "C" || strings.HasPrefix(locale, "C.") {
+			set(key, "C.UTF-8")
+		}
+	}
 	if path := value("OMARCHY_PATH"); path != "" && omarchyPathValid(path) {
 		return env, nil
 	}
