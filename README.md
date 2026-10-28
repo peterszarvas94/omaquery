@@ -73,7 +73,7 @@ The command removes the plugin first, then deletes the installed binary, so a
 partial failure leaves the CLI available to retry. For another machine:
 
 ```sh
-ssh laptop omaquery uninstall
+omaquery uninstall --remote laptop
 ```
 
 Removing the `omaquery` binary disables local and remote prompts. No secrets or

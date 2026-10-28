@@ -116,19 +116,33 @@ func newInstallCommand() *cobra.Command {
 }
 
 func newUninstallCommand() *cobra.Command {
-	return &cobra.Command{
-		Use:   "uninstall",
+	var remote string
+	cmd := &cobra.Command{
+		Use:   "uninstall [flags]",
 		Short: "Remove omaquery and its Omarchy prompt",
 		Long: "Remove the prompt plugin, then delete the installed omaquery binary.\n" +
-			"The plugin is removed first so a failed uninstall can be retried.",
-		Example: "  omaquery uninstall\n  ssh laptop omaquery uninstall",
+			"The plugin is removed first so a failed uninstall can be retried.\n" +
+			"With --remote, run the same removal on another Omarchy machine over SSH.",
+		Example: "  omaquery uninstall\n  omaquery uninstall --remote laptop",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if remote != "" && !validTarget(remote) {
+				return errors.New("remote must be an SSH host or user@host without options")
+			}
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			return uninstallLocal(ctx, cmd.OutOrStdout())
+			if remote == "" {
+				return uninstallLocal(ctx, cmd.OutOrStdout())
+			}
+			self, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			return uninstallRemote(ctx, remote, self, cmd.OutOrStdout())
 		},
 	}
+	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine from which to uninstall")
+	return cmd
 }
 
 func newRunCommand(execute func(request, time.Duration) int, code *int) *cobra.Command {

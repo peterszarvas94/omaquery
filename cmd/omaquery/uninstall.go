@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 )
 
 func uninstallLocal(ctx context.Context, out io.Writer) error {
@@ -58,4 +59,22 @@ func uninstallLocal(ctx context.Context, out io.Writer) error {
 	}
 	fmt.Fprintf(out, "Binary: %s\n", binaryPath)
 	return nil
+}
+
+func uninstallRemote(ctx context.Context, target, executable string, out io.Writer) error {
+	if !validTarget(target) {
+		return fmt.Errorf("remote must be an SSH host or user@host without options")
+	}
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("remote uninstall requires a Linux build of omaquery")
+	}
+	state, err := probeRemote(ctx, target)
+	if err != nil {
+		return err
+	}
+	if state.Arch != "" && !archMatches(state.Arch) {
+		return fmt.Errorf("remote machine is %s but this omaquery binary is %s; install a matching binary on the remote first", state.Arch, runtime.GOARCH)
+	}
+	fmt.Fprintf(out, "Removing omaquery from %s\n", target)
+	return runRemoteBinary(ctx, target, executable, "uninstall", out)
 }

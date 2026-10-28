@@ -534,16 +534,20 @@ func installRemote(ctx context.Context, target, executable string, force bool, o
 		fmt.Fprintf(out, "Updating omaquery on %s (%s -> %s)\n", target, state.Version, version)
 	}
 
+	return runRemoteBinary(ctx, target, executable, "install", out)
+}
+
+func runRemoteBinary(ctx context.Context, target, executable, action string, out io.Writer) error {
 	binary, err := os.Open(executable)
 	if err != nil {
 		return err
 	}
 	defer binary.Close()
-	const script = `tmp=$(mktemp -d) || exit 1
+	script := `tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 cat > "$tmp/omaquery" || exit 1
 chmod 700 "$tmp/omaquery" || exit 1
-"$tmp/omaquery" install`
+"$tmp/omaquery" ` + action
 	cmd := remoteExec(ctx, "ssh", append(sshBaseArgs(target), script)...)
 	cmd.Stdin = binary
 	cmd.Stdout = out
@@ -551,9 +555,9 @@ chmod 700 "$tmp/omaquery" || exit 1
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if detail := strings.TrimSpace(stderr.String()); detail != "" {
-			return fmt.Errorf("remote install failed: %s", detail)
+			return fmt.Errorf("remote %s failed: %s", action, detail)
 		}
-		return fmt.Errorf("remote install failed: %w", err)
+		return fmt.Errorf("remote %s failed: %w", action, err)
 	}
 	if detail := strings.TrimSpace(stderr.String()); detail != "" {
 		fmt.Fprintln(out, detail)

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -67,6 +69,37 @@ func TestUninstallLocalRemovesPluginAndBinary(t *testing.T) {
 		if !strings.Contains(joined, "omarchy plugin remove "+id+" --yes") {
 			t.Fatalf("missing removal for %s:\n%s", id, joined)
 		}
+	}
+}
+
+func TestUninstallRemote(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "omaquery")
+	if err := os.WriteFile(source, []byte("binary"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	previousRemoteExec := remoteExec
+	t.Cleanup(func() { remoteExec = previousRemoteExec })
+	uploads := 0
+	remoteExec = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		uploads++
+		if name != "ssh" {
+			t.Fatalf("unexpected remote command: %s %v", name, args)
+		}
+		return exec.CommandContext(ctx, "sh", "-c", "cat >/dev/null; printf 'remote uninstall output\\n'")
+	}
+	remoteArch := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[runtime.GOARCH]
+	if remoteArch == "" {
+		t.Skip("unsupported test architecture")
+	}
+	stubInstallCommand(t, func(_ []string, name string, args ...string) ([]byte, error) {
+		return []byte("arch=" + remoteArch + "\n"), nil
+	})
+	var out bytes.Buffer
+	if err := uninstallRemote(context.Background(), "laptop", source, &out); err != nil {
+		t.Fatal(err)
+	}
+	if uploads != 1 || !strings.Contains(out.String(), "Removing omaquery from laptop") || !strings.Contains(out.String(), "remote uninstall output") {
+		t.Fatalf("uploads=%d output=%q", uploads, out.String())
 	}
 }
 
