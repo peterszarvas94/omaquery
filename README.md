@@ -102,6 +102,37 @@ omaquery run --remote laptop API_TOKEN -- ./deploy
 `--remote SSH_HOST`. Options come before value names. `--prompt-on` remains as a
 deprecated alias for `--remote`.
 
+Request multiple secrets by listing their environment variable names before
+`--`. They appear together in one popup, and each value is passed to the command
+under its corresponding name (up to 16 fields):
+
+```sh
+omaquery run API_TOKEN DATABASE_PASSWORD -- ./deploy
+```
+
+Add a hint after a colon using `NAME:hint`. Quote the whole argument when the
+hint contains spaces. Hints appear below the field names in the popup; they do
+not change the environment variable names. Use them to describe what to enter,
+not to supply secret values:
+
+```sh
+omaquery run --reason "Deploy the application" \
+  'API_TOKEN:Deployment API token' \
+  'DATABASE_PASSWORD:Password for the application database' \
+  -- ./deploy
+```
+
+To collect both secrets on another Omarchy machine, add `--remote laptop` before
+the field arguments. The popup appears on `laptop`, while `./deploy` runs on the
+machine where you invoked the command:
+
+```sh
+omaquery run --remote laptop --reason "Deploy the application" \
+  'API_TOKEN:Deployment API token' \
+  'DATABASE_PASSWORD:Password for the application database' \
+  -- ./deploy
+```
+
 The command runs where you invoke `omaquery`, even when the popup appears on
 another machine. Review the displayed command before submitting: a command can
 print or transmit its environment. Escape cancels the prompt.
