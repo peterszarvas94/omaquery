@@ -122,7 +122,16 @@ omaquery run --reason "Deploy the application" \
   -- ./deploy
 ```
 
-Multiple fields and hints also work with `--remote laptop`.
+To collect both secrets on another Omarchy machine, add `--remote laptop` before
+the field arguments. The popup appears on `laptop`, while `./deploy` runs on the
+machine where you invoked the command:
+
+```sh
+omaquery run --remote laptop --reason "Deploy the application" \
+  'API_TOKEN:Deployment API token' \
+  'DATABASE_PASSWORD:Password for the application database' \
+  -- ./deploy
+```
 
 The command runs where you invoke `omaquery`, even when the popup appears on
 another machine. Review the displayed command before submitting: a command can
