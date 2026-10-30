@@ -1,69 +1,85 @@
-# Android companion proof of concept
+# Android companion — notification preview
 
-A small native Android app, plus an explicitly enabled Go mobile bridge. It uses
-SSE snapshots for pending requests and HTTP POST for approvals and rejection.
-The normal Omarchy popup and SSH relay remain separate.
+A native Android app with a user-enabled background SSE listener. Real
+`omaquery run --mobile` requests appear as Android notifications. Tapping an
+alert opens a dedicated approval screen for that exact request; values are
+returned by HTTP POST. The normal desktop popup and SSH relay stay separate.
 
-## Try it
+## Use it
 
-1. Connect the computer and Android phone to Tailscale.
-2. Build the CLI with `make build`, then start a bridge on the computer's
-   Tailscale IP, allowing **only the phone's Tailscale IP**:
+1. Connect the computer and phone to Tailscale. Build the CLI with `make build`
+   and run a bridge on the computer's tailnet IP, allowing only the phone:
 
    ```sh
    build/omaquery mobile serve --listen 100.100.10.10:9797 --allow-peer 100.100.10.11
    ```
 
-3. Sideload `omaquery-companion.apk`. Set its computer address to
-   `http://100.100.10.10:9797`, tap **Connect**, and keep it open.
-4. Tap **Try a demo request**, review the exact command, enter a dummy value,
-   and tap **Approve and run**. A fixed simulated deployment command executes
-   on the computer with the value in its environment. Its result appears on the
-   phone; the value itself is never printed.
-5. For your own commands, use the newly built CLI:
+2. Install the APK over the previous preview. Set the computer address to
+   `http://100.100.10.10:9797`, tap **Enable notifications**, and grant Android's
+   notification permission. A persistent listening notification stays visible.
+3. Leave the app. On the computer, request values for an actual command:
 
    ```sh
-   build/omaquery run --mobile --reason 'Deploy the demo' DEPLOY_TOKEN -- ./deploy
+   build/omaquery run --mobile --reason 'Deploy the release' DEPLOY_TOKEN -- ./deploy
    ```
 
-Only that invocation receives the approved values. Rejection exits without
-running the command. `--timeout 5m` controls expiration; stopping the waiting
-CLI removes its pending request. `--mobile` and `--remote` cannot be combined.
-Stop the bridge with Ctrl+C. Do not substitute the normal installed CLI unless
-it has been rebuilt with this branch.
+4. Tap the new **A command needs your approval** notification. Review the host,
+   exact command, working directory, reason and deadline. Enter the value and
+   choose **Approve and run** or **Reject request**.
 
-## Boundaries
+The connection screen lists pending requests as a fallback. It has no demo
+button. Only the waiting CLI invocation gets approved values. `--timeout 5m`
+controls expiry; stopping the CLI withdraws the request and its notification.
+An alert for one request can never silently show another queued command.
 
-- **Foreground only:** no Android notification, foreground service, Firebase,
-  or wake-up mechanism. Going to the background closes SSE and clears entered
-  values. Returning reconnects to a fresh snapshot. Pending requests can survive
-  phone disconnection until the CLI cancels or its deadline passes.
-- **Tailnet only:** the listener accepts an explicit Tailscale IP and one exact
-  peer IP. No wildcard or LAN address, forwarding headers, CORS, or public
-  listener. Loopback is supported for development only.
-- **Network identity, not app identity:** every app/process able to originate
-  traffic from that allowed device can access the bridge. There is no separate
-  pairing, app credential, biometric check, or per-command policy in this POC.
-  Run it only with a trusted phone and trusted local user. Tailnet access policy
-  should also restrict this port. This is not a production secret manager.
-- HTTP is carried inside the encrypted Tailscale tunnel. It does not implement
-  independent HTTPS. The Android address field accepts literal tailnet IPv4
-  addresses only (plus `10.0.2.2` in this debug preview for an emulator).
-- Requests and values stay in memory. SSE carries request metadata and public
-  demo status only. Replies are one-shot and expire. Values are excluded from
-  app preferences, backups, logs, command arguments and ordinary CLI output.
-  The approved command itself can print or transmit its environment.
-- Android uses secure-window protection and disables input autofill and saved
-  view state. A keyboard still necessarily receives what you type; use a trusted
-  keyboard. These measures do not protect against root or an untrusted OS.
-- The CLI's local mobile socket is separate, owned, and mode 0600 in an owned
-  mode-0700 runtime directory. The existing desktop bridge remains unaffected.
+Use **Stop notifications** in the app, or **Stop listening** on its persistent
+notification, to stop the background connection. After reboot, reopen the app
+to resume listening. Force-stopping the app prevents notifications until it is
+opened again. Keep Tailscale connected on both devices.
 
-## Build the APK
+## Background delivery and Android
 
-Requires an Android SDK with platform 36 and build-tools 36.0.0, JDK 21+, `zip`,
-and an existing standard Android development keystore. No Gradle, third-party
-Android dependencies, embedded credentials, or Python are needed:
+The app starts a user-visible foreground service while its connection screen is
+open. Android 13+ notification permission is requested explicitly. Android 14+
+uses the `specialUse` foreground service type for the user-requested ongoing
+approval connection. Incoming notifications open an activity through a direct,
+immutable PendingIntent with a normal back stack; no notification trampoline,
+full-screen takeover, or overlay permission is used.
+
+This is a sideload preview, not a claim of Play Store foreground-service policy
+approval. The listener reconnects with bounded backoff. It does not use Firebase,
+a public push relay, polling jobs, or a permanent CPU wake lock. Doze/network
+suspension and vendor battery management can still delay delivery. On devices
+that kill the listener, allow background operation in the phone's battery
+settings. There is no automatic boot receiver.
+
+## Security boundaries
+
+- The bridge binds to one explicit tailnet IP and accepts one exact phone IP.
+  Wildcard/LAN binds, forwarding-header trust and browser CORS are not supported.
+  Loopback is allowed only for local development.
+- Tailscale supplies network encryption and peer identity. There is no separate
+  app pairing, app credential or biometric gate. Other software originating
+  traffic from the allowed device can also reach the bridge. Use trusted devices
+  and restrict this port in tailnet policy. HTTP has no independent TLS layer.
+- Requests and values remain in memory. Notifications and PendingIntents contain
+  generic wording and a request ID, never entered values or command contents.
+  Expired, cancelled and consumed requests have their alerts withdrawn.
+- The background service handles request metadata only. Secret entry lives in
+  the secure approval activity, is cleared on pause, and is sent only to the
+  approved command. Values are not written to preferences, backups, logs,
+  ordinary CLI output or command arguments. The approved command itself can
+  print or transmit its environment, so review it before approval.
+- The local mobile socket is separate, owned, and mode 0600 inside an owned
+  mode-0700 runtime directory. One-shot replies reject replays and stale IDs.
+- Android secure-window protection, disabled input autofill/view saving and
+  backup exclusions remain enabled. Use a trusted keyboard; these measures do
+  not protect against root or an untrusted operating system.
+
+## Build and verify
+
+Requires JDK 21+, platform 36, build-tools 36.0.0, `zip`, and an existing standard
+Android development keystore. No Gradle, Android libraries or Python are needed:
 
 ```sh
 export ANDROID_HOME=/path/to/android-sdk
@@ -71,32 +87,14 @@ export JAVA_HOME=/path/to/jdk-21
 ./android/build-apk.sh
 ```
 
-The script reuses `~/.android/debug.keystore`, or `ANDROID_DEBUG_KEYSTORE`.
-The standard development key uses Android's conventional debug alias/password;
-this sideload preview must not be published as a release build. Output:
-`android/build/omaquery-companion.apk`.
+Output: `android/build/omaquery-companion.apk`. Version code 2 updates the previous
+preview when signed with the same key. The script reuses `~/.android/debug.keystore`
+or `ANDROID_DEBUG_KEYSTORE`; this is development signing, not a release key.
+`OMAQUERY_BRIDGE_URL` can prefill a non-secret literal tailnet IPv4 address. API
+and build-tools versions can be overridden with `SDK_PLATFORM` and `BUILD_TOOLS`.
 
-Optionally set `OMAQUERY_BRIDGE_URL=http://100.100.10.10:9797` to prefill a non-secret
-connection address in the APK. Never embed a token or secret. API and build-tools
-versions can be overridden with `SDK_PLATFORM` and `BUILD_TOOLS`.
-
-Go validation: `make check`. Android validation: the SDK's standalone `lint`
-with this app's sources, resources and compiled classes, followed by manual
-emulator/device checks. No Android UI tests are included.
-
-## Protocol
-
-- `GET /v1/events`: `event: snapshot` containing `{hostname, requests,
-  demo_status?}`. Each request has a `request` object and an `expires_at` RFC3339
-  deadline. The initial snapshot is sent immediately; subsequent snapshots also
-  serve as heartbeats. Reconnect fetches all still-pending requests.
-- `POST /v1/response`: `{id, cancelled, values?}`. Values must match all field
-  names and be non-empty. HTTP 204 accepts; 400 rejects malformed values; 410
-  rejects expired, cancelled, consumed, and unknown IDs. The request is consumed
-  before its command resumes. A lost response acknowledgement must not cause a
-  second execution.
-- `POST /v1/demo`: creates one fixed, two-minute demo request (HTTP 202). It does
-  not accept caller-provided commands. Additional simultaneous demos get 409.
-
-The bridge limits pending requests, aggregate metadata size, HTTP body/header
-size, and simultaneous SSE connections. It does not log request/response bodies.
+Run `make check`, Android SDK standalone lint, APK signature verification and
+manual Android notification/tap/approval checks. No frontend UI tests are included.
+The old bridge's `/v1/demo` endpoint remains for backwards compatibility but the
+notification app never calls it. Request/response protocol is unchanged:
+`GET /v1/events` snapshots and `POST /v1/response` one-shot replies.

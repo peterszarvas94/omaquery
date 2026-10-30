@@ -23,7 +23,7 @@ public final class BuildConfig {
 }
 CONFIG
 "$tools/aapt2" compile --dir app/src/main/res -o "$out/resources.zip"
-"$tools/aapt2" link -o "$out/unsigned.apk" -I "$platform" --manifest app/src/main/AndroidManifest.xml --java "$out/generated" --version-code 1 --version-name 0.1.0-poc "$out/resources.zip"
+"$tools/aapt2" link -o "$out/unsigned.apk" -I "$platform" --manifest app/src/main/AndroidManifest.xml --java "$out/generated" --version-code 2 --version-name 0.2.0-notifications "$out/resources.zip"
 mapfile -t java_sources < <(find app/src/main/java "$out/generated" -name '*.java' -print)
 "$JAVA_HOME/bin/javac" -Xlint:all -encoding UTF-8 -source 17 -target 17 -classpath "$platform" -d "$out/classes" "${java_sources[@]}"
 "$JAVA_HOME/bin/jar" --create --file "$out/classes.jar" -C "$out/classes" .

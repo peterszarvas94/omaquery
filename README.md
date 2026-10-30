@@ -130,8 +130,10 @@ omaquery run DEMO_TOKEN -- sh -c 'printf "%s\n" "$DEMO_TOKEN"'
 ## Experimental Android companion
 
 An opt-in Android proof of concept is available on this branch. It connects to
-an explicitly enabled, peer-restricted Tailscale bridge using SSE. The app must
-remain open; background notifications and app-level pairing are not implemented.
+an explicitly enabled, peer-restricted Tailscale bridge using SSE. A user-enabled
+background listener posts request notifications which open a dedicated approval
+screen. App-level pairing is not implemented; Android battery restrictions can
+still delay background delivery.
 See [the Android setup and security boundaries](android/README.md).
 
 ## License

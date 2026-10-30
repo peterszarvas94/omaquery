@@ -1,7 +1,9 @@
 <resources>
-    <string name="app_name">Omaquery Preview</string>
-    <string name="connect">Connect</string>
-    <string name="disconnect">Disconnect</string>
+    <string name="app_name">Omaquery</string>
     <string name="sending">Sending…</string>
     <string name="approve">Approve and run</string>
+    <string name="allow_notifications">Allow Omaquery notifications in Android settings first.</string>
+    <string name="notifications_needed">Notification permission is needed to alert you to requests.</string>
+    <string name="review_request">Review request from %1$s</string>
+    <string name="pending_error">Could not read pending requests</string>
 </resources>
