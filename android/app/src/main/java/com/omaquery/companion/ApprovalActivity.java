@@ -52,7 +52,6 @@ public final class ApprovalActivity extends Activity {
   private final Runnable clock = new Runnable() {
     public void run() {
       JSONObject latest = BridgeService.snapshot();
-      base = BridgeService.address();
       if (latest != null)
         render(latest);
       else {
@@ -104,8 +103,10 @@ public final class ApprovalActivity extends Activity {
     requestedId = getIntent().getStringExtra("request_id");
     if (requestedId == null)
       requestedId = "";
-    add(root, "OMAQUERY / COMMAND APPROVAL", 12, ACCENT, true);
-    Button back = button(root, "Back to connections", false);
+    TextView back = add(root, "‹ Connections", 15, ACCENT, false);
+    back.setPadding(0, dp(10), 0, dp(14));
+    back.setMinHeight(dp(48));
+    back.setFocusable(true);
     back.setOnClickListener(v -> {
       startActivity(new android.content.Intent(this, MainActivity.class)
               .addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP));
@@ -174,7 +175,8 @@ public final class ApprovalActivity extends Activity {
     box.setPadding(dp(18), dp(18), dp(18), dp(18));
     GradientDrawable bg = new GradientDrawable();
     bg.setColor(CARD);
-    bg.setCornerRadius(dp(18));
+    bg.setCornerRadius(dp(10));
+    bg.setStroke(dp(1), Color.rgb(63, 68, 88));
     box.setBackground(bg);
     parent.addView(box, wide());
     return box;
@@ -253,20 +255,49 @@ public final class ApprovalActivity extends Activity {
         return;
       resetContent();
       currentId = id;
+      // Pin approval POSTs to the address on which this request was reviewed.
+      base = BridgeService.address();
       expires = deadline;
       LinearLayout box = card(content);
-      add(box, "COMMAND APPROVAL", 12, ACCENT, true);
-      TextView from = add(box, "Requested on " + hostname, 20, FG, true);
-      margin(from, 10, 8);
-      add(box, "WORKING DIRECTORY", 11, MUTED, true);
-      TextView cwd = add(box, req.getString("cwd"), 14, FG, false);
+      LinearLayout hero = new LinearLayout(this);
+      hero.setGravity(android.view.Gravity.CENTER_VERTICAL);
+      box.addView(hero, wide());
+      android.widget.ImageView icon = new android.widget.ImageView(this);
+      icon.setImageResource(R.drawable.ic_omaquery);
+      hero.addView(icon, new LinearLayout.LayoutParams(dp(36), dp(36)));
+      LinearLayout titles = new LinearLayout(this);
+      titles.setOrientation(LinearLayout.VERTICAL);
+      titles.setPadding(dp(12), 0, 0, 0);
+      hero.addView(titles, new LinearLayout.LayoutParams(0, -2, 1));
+      add(titles, "omaquery", 24, FG, true);
+      add(titles, "Command environment values", 12, MUTED, false);
+      add(hero, "Remote", 12, ACCENT, false).setLayoutParams(new LinearLayout.LayoutParams(-2, -2));
+      View separator = new View(this);
+      separator.setBackgroundColor(Color.rgb(65, 69, 88));
+      LinearLayout.LayoutParams rule = new LinearLayout.LayoutParams(-1, dp(1));
+      rule.setMargins(0, dp(18), 0, dp(16));
+      box.addView(separator, rule);
+      add(box, "A command is requesting values for its environment.", 14, MUTED, false);
+      TextView from = add(box, "Remote request from " + hostname, 14, ACCENT, false);
+      margin(from, 8, 16);
+      LinearLayout details = card(box);
+      add(details, "WORKING DIRECTORY", 11, MUTED, true);
+      TextView cwd = add(details, req.getString("cwd"), 14, MUTED, false);
       cwd.setTypeface(Typeface.MONOSPACE);
       margin(cwd, 4, 16);
-      add(box, "EXACT COMMAND · JSON ARGUMENTS", 11, MUTED, true);
-      TextView command = add(box, req.getJSONArray("command").toString(2), 15, FG, false);
+      add(details, "COMMAND", 11, MUTED, true);
+      JSONArray arguments = req.getJSONArray("command");
+      StringBuilder commandLine = new StringBuilder();
+      for (int i = 0; i < arguments.length(); i++) {
+        if (i > 0)
+          commandLine.append(' ');
+        commandLine.append(JSONObject.quote(arguments.getString(i)));
+      }
+      TextView command = add(details, commandLine.toString(), 15, FG, false);
       command.setTypeface(Typeface.MONOSPACE);
       command.setTextIsSelectable(true);
-      margin(command, 5, 16);
+      margin(command, 5, 0);
+      margin(details, 0, 18);
       String reason = req.optString("reason", "");
       if (!reason.isEmpty()) {
         add(box, "REASON", 11, MUTED, true);
@@ -286,25 +317,46 @@ public final class ApprovalActivity extends Activity {
         input.setTextColor(FG);
         input.setHintTextColor(MUTED);
         input.setTextSize(18);
-        input.setHint("Enter value");
+        input.setHint("Enter or paste value");
         input.setSingleLine(true);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
             | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setSaveEnabled(false);
         input.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO);
         input.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
-        box.addView(input, wide());
-        margin(input, 4, 16);
+        LinearLayout entry = new LinearLayout(this);
+        entry.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        box.addView(entry, wide());
+        entry.addView(input, new LinearLayout.LayoutParams(0, -2, 1));
+        Button reveal = new Button(this);
+        reveal.setAllCaps(false);
+        reveal.setText(R.string.show);
+        reveal.setTextColor(ACCENT);
+        reveal.setMinWidth(dp(64));
+        entry.addView(reveal, new LinearLayout.LayoutParams(-2, -2));
+        reveal.setOnClickListener(v -> {
+          boolean hidden = input.getTransformationMethod()
+                               instanceof android.text.method.PasswordTransformationMethod;
+          input.setTransformationMethod(
+              hidden ? null : android.text.method.PasswordTransformationMethod.getInstance());
+          reveal.setText(hidden ? R.string.hide : R.string.show);
+          input.setSelection(input.length());
+        });
+        margin(entry, 4, 16);
         fields.add(input);
       }
-      TextView warning = add(box,
-          "Values go to this command’s environment. The command can print or transmit them. Only "
-              + "approve commands you trust.",
-          13, MUTED, false);
+      TextView warning =
+          add(box, "Values go to this command. Its output may expose them.", 13, MUTED, false);
       margin(warning, 0, 12);
       expiry = add(box, "", 13, MUTED, false);
-      approve = button(box, "Approve and run", true);
-      reject = button(box, "Reject request", false);
+      LinearLayout actions = new LinearLayout(this);
+      box.addView(actions, wide());
+      reject = button(actions, "Cancel", false);
+      approve = button(actions, "Run command", true);
+      LinearLayout.LayoutParams cancelLayout = new LinearLayout.LayoutParams(0, -2, 1);
+      cancelLayout.setMargins(0, 0, dp(8), 0);
+      reject.setLayoutParams(cancelLayout);
+      approve.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1));
       approve.setOnClickListener(v -> respond(false));
       reject.setOnClickListener(v -> respond(true));
       if (requests.length() > 1) {

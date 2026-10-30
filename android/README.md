@@ -15,7 +15,7 @@ returned by HTTP POST. The normal desktop popup and SSH relay stay separate.
    ```
 
 2. Install the APK over the previous preview. Set the computer address to
-   `http://100.100.10.10:9797`, tap **Enable notifications**, and grant Android's
+   `100.100.10.10:9797` or `laptop:9797`, tap **Connect**, and grant Android's
    notification permission. A persistent listening notification stays visible.
 3. Leave the app. On the computer, request values for an actual command:
 
@@ -25,14 +25,14 @@ returned by HTTP POST. The normal desktop popup and SSH relay stay separate.
 
 4. Tap the new **A command needs your approval** notification. Review the host,
    exact command, working directory, reason and deadline. Enter the value and
-   choose **Approve and run** or **Reject request**.
+   choose **Run command** or **Cancel**.
 
 The connection screen lists pending requests as a fallback. It has no demo
 button. Only the waiting CLI invocation gets approved values. `--timeout 5m`
 controls expiry; stopping the CLI withdraws the request and its notification.
 An alert for one request can never silently show another queued command.
 
-Use **Stop notifications** in the app, or **Stop listening** on its persistent
+Use **Disconnect** in the app, or **Stop listening** on its persistent
 notification, to stop the background connection. After reboot, reopen the app
 to resume listening. Force-stopping the app prevents notifications until it is
 opened again. Keep Tailscale connected on both devices.
@@ -87,10 +87,14 @@ export JAVA_HOME=/path/to/jdk-21
 ./android/build-apk.sh
 ```
 
-Output: `android/build/omaquery-companion.apk`. Version code 2 updates the previous
+Output: `android/build/omaquery-0.2.1.apk`. Version code 3 updates the previous
 preview when signed with the same key. The script reuses `~/.android/debug.keystore`
 or `ANDROID_DEBUG_KEYSTORE`; this is development signing, not a release key.
-`OMAQUERY_BRIDGE_URL` can prefill a non-secret literal tailnet IPv4 address. API
+`OMAQUERY_BRIDGE_URL` can prefill a non-secret literal tailnet IPv4 address.
+The connection field also accepts short MagicDNS names and tailnet FQDNs, with
+or without `http://`. Tailscale DNS must be enabled for hostname resolution.
+DNS runs off the main thread and all answers must be in the tailnet address
+ranges; HTTP connections and approval POSTs use the validated resolved IP. API
 and build-tools versions can be overridden with `SDK_PLATFORM` and `BUILD_TOOLS`.
 
 Run `make check`, Android SDK standalone lint, APK signature verification and

@@ -39,7 +39,8 @@ public final class BridgeService extends Service {
   private volatile HttpURLConnection connection;
   private volatile JSONObject snapshot;
   private volatile String status = "Connecting…";
-  private String base;
+  private volatile String base = "";
+  private String configuredAddress;
   private final Runnable expirySweep = new Runnable() {
     public void run() {
       Iterator<Map.Entry<String, Long>> it = notified.entrySet().iterator();
@@ -102,8 +103,8 @@ public final class BridgeService extends Service {
             STATUS_ID, statusNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
       else
         startForeground(STATUS_ID, statusNotification());
-      if (!address.equals(base)) {
-        base = address;
+      if (!address.equals(configuredAddress)) {
+        configuredAddress = address;
         connect();
       }
       return START_STICKY;
@@ -195,7 +196,9 @@ public final class BridgeService extends Service {
       while (generation.get() == token) {
         HttpURLConnection c = null;
         try {
-          c = (HttpURLConnection) URI.create(base + "/v1/events").toURL().openConnection();
+          String resolved = BridgeClient.resolveAddress(this, configuredAddress);
+          base = resolved;
+          c = (HttpURLConnection) URI.create(resolved + "/v1/events").toURL().openConnection();
           connection = c;
           c.setConnectTimeout(7000);
           c.setReadTimeout(25000);
@@ -236,7 +239,7 @@ public final class BridgeService extends Service {
           main.post(() -> {
             if (generation.get() == token) {
               clearRequests();
-              status = "Reconnecting — check Tailscale and your computer";
+              status = "Cannot connect — check the address and Tailscale";
               notifications.notify(STATUS_ID, statusNotification());
             }
           });

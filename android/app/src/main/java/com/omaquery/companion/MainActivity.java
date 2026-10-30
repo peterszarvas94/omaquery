@@ -66,12 +66,7 @@ public final class MainActivity extends Activity {
       });
     else
       scroll.setFitsSystemWindows(true);
-    text(root, "OMAQUERY", 13).setTextColor(Color.rgb(194, 181, 255));
-    text(root, "Command approvals, wherever you are.", 28);
-    text(root,
-        "New requests arrive as notifications. Tap one to review the command and enter its values "
-            + "on a separate screen.",
-        16);
+    text(root, "omaquery", 28);
     LinearLayout box = new LinearLayout(this);
     box.setOrientation(LinearLayout.VERTICAL);
     box.setPadding(dp(18), dp(18), dp(18), dp(18));
@@ -80,7 +75,7 @@ public final class MainActivity extends Activity {
     bg.setCornerRadius(dp(18));
     box.setBackground(bg);
     root.addView(box, new LinearLayout.LayoutParams(-1, -2));
-    text(box, "YOUR COMPUTER", 12);
+    text(box, "Computer", 14);
     address = new EditText(this);
     address.setTextColor(Color.WHITE);
     address.setTextSize(17);
@@ -88,7 +83,11 @@ public final class MainActivity extends Activity {
     address.setSaveEnabled(false);
     address.setInputType(
         android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-    address.setText(prefs.getString("address", BuildConfig.DEFAULT_BRIDGE));
+    address.setHint("IP or hostname:port");
+    address.setHintTextColor(Color.rgb(168, 174, 196));
+    address.setText(
+        BridgeClient.displayAddress(prefs.getString("address", BuildConfig.DEFAULT_BRIDGE)));
+    address.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
     box.addView(address, new LinearLayout.LayoutParams(-1, -2));
     toggle = new Button(this);
     toggle.setAllCaps(false);
@@ -105,11 +104,16 @@ public final class MainActivity extends Activity {
       } else
         enable();
     });
+    address.setOnEditorActionListener((v, action, event) -> {
+      if (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) {
+        if (!prefs.getBoolean("enabled", false))
+          toggle.performClick();
+        return true;
+      }
+      return false;
+    });
     status = text(box, "", 14);
-    text(root,
-        "Keep Tailscale connected. A persistent listening notification keeps the connection "
-            + "active. Android battery restrictions can still delay requests during deep sleep.",
-        14);
+    text(root, "Tailscale must be connected.", 13).setTextColor(Color.rgb(168, 174, 196));
     pending = new LinearLayout(this);
     pending.setOrientation(LinearLayout.VERTICAL);
     root.addView(pending, new LinearLayout.LayoutParams(-1, -2));
@@ -126,7 +130,7 @@ public final class MainActivity extends Activity {
       startForegroundService(new Intent(this, BridgeService.class));
       render();
     } catch (Exception e) {
-      address.setError("Use http:// followed by your computer’s Tailscale IP and port");
+      address.setError("Enter IP:port or hostname:port");
     }
   }
   @Override
@@ -152,7 +156,7 @@ public final class MainActivity extends Activity {
   private void render() {
     boolean enabled = prefs.getBoolean("enabled", false);
     address.setEnabled(!enabled);
-    toggle.setText(enabled ? "Stop notifications" : "Enable notifications");
+    toggle.setText(enabled ? "Disconnect" : "Connect");
     status.setText(BridgeService.status());
     JSONObject snapshot = BridgeService.snapshot();
     String next = snapshot == null ? "" : snapshot.toString();
@@ -165,7 +169,6 @@ public final class MainActivity extends Activity {
     try {
       JSONArray requests = snapshot.getJSONArray("requests");
       if (requests.length() == 0) {
-        text(pending, "Listening for command requests", 18);
         return;
       }
       text(pending, "Pending approvals", 20);
