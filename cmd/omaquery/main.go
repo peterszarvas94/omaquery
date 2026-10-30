@@ -35,6 +35,7 @@ type request struct {
 	Reason  string   `json:"reason,omitempty"`
 	Origin  string   `json:"origin,omitempty"`
 	Target  string   `json:"-"`
+	Mobile  bool     `json:"-"`
 }
 type response struct {
 	ID        string            `json:"id,omitempty"`
@@ -83,15 +84,19 @@ func parseRun(args []string, sep int, reason, timeout, remote string) (request, 
 	return req, duration, nil
 }
 func runRequest(req request, duration time.Duration) int {
-	if err := requireOmarchy(); err != nil {
-		return fail(err)
+	if !req.Mobile {
+		if err := requireOmarchy(); err != nil {
+			return fail(err)
+		}
 	}
 	var err error
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	promptCtx, cancel := context.WithTimeout(ctx, duration)
 	var values map[string]string
-	if req.Target == "" {
+	if req.Mobile {
+		values, err = askMobile(promptCtx, req)
+	} else if req.Target == "" {
 		values, err = ask(promptCtx, req)
 	} else {
 		values, err = askRemote(promptCtx, req)

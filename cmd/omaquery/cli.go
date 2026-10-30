@@ -33,7 +33,8 @@ func newRootCommand(code *int) *cobra.Command {
 		Short: "Request values through an Omarchy desktop popup",
 		Long: "Request values through an Omarchy desktop popup and pass them to a\n" +
 			"command as environment variables. Prompts can appear locally or on\n" +
-			"another Omarchy machine over SSH.",
+			"another Omarchy machine over SSH. The experimental --mobile path uses\n" +
+			"an explicitly enabled Android companion bridge.",
 		Version:       version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -46,6 +47,7 @@ func newRootCommand(code *int) *cobra.Command {
 	root.AddCommand(newRunCommand(func(req request, duration time.Duration) int {
 		return runRequest(req, duration)
 	}, code))
+	root.AddCommand(newMobileCommand())
 	root.AddCommand(newInstallCommand())
 	root.AddCommand(newUpdateCommand())
 	root.AddCommand(newUninstallCommand())
@@ -173,13 +175,15 @@ func newUninstallCommand() *cobra.Command {
 
 func newRunCommand(execute func(request, time.Duration) int, code *int) *cobra.Command {
 	var reason, timeout, remote, legacyRemote string
+	var mobile bool
 	cmd := &cobra.Command{
 		Use:   "run [flags] NAME[:hint]... -- COMMAND [ARG...]",
 		Short: "Prompt for values and run a command",
 		Long: "Prompt for up to 16 values and pass them to the command's environment.\n" +
 			"The command runs on this machine, even when --remote shows the popup\n" +
-			"elsewhere. Review the displayed command before submitting: it can print\n" +
-			"or transmit its environment. Escape cancels the prompt.",
+			"elsewhere or --mobile requests values on Android. Review the displayed\n" +
+			"command before submitting: it can print or transmit its environment.\n" +
+			"Escape cancels desktop prompts; use Reject request on Android.",
 		Example: "  omaquery run API_TOKEN -- ./deploy\n  omaquery run --remote laptop API_TOKEN -- ./deploy\n  omaquery run API_TOKEN -- sh -c 'printf \"%s\\n\" \"$API_TOKEN\"'",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if legacyRemote != "" {
@@ -192,10 +196,15 @@ func newRunCommand(execute func(request, time.Duration) int, code *int) *cobra.C
 			if err != nil {
 				return err
 			}
+			if mobile && remote != "" {
+				return errors.New("--mobile and --remote cannot be combined")
+			}
+			req.Mobile = mobile
 			*code = execute(req, duration)
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&mobile, "mobile", false, "Request values from the experimental Android companion")
 	cmd.Flags().StringVar(&reason, "reason", "", "Reason shown in the popup")
 	cmd.Flags().StringVar(&timeout, "timeout", "5m", "Prompt timeout (seconds or Go duration; max 24h)")
 	cmd.Flags().StringVar(&remote, "remote", "", "SSH machine on which to show the popup")
