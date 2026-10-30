@@ -66,14 +66,16 @@ settings. There is no automatic boot receiver.
   generic wording and a request ID, never entered values or command contents.
   Expired, cancelled and consumed requests have their alerts withdrawn.
 - The background service handles request metadata only. Secret entry lives in
-  the secure approval activity, is cleared on pause, and is sent only to the
+  the approval activity, is cleared on pause, and is sent only to the
   approved command. Values are not written to preferences, backups, logs,
   ordinary CLI output or command arguments. The approved command itself can
   print or transmit its environment, so review it before approval.
 - The local mobile socket is separate, owned, and mode 0600 inside an owned
   mode-0700 runtime directory. One-shot replies reject replays and stale IDs.
-- Android secure-window protection, disabled input autofill/view saving and
-  backup exclusions remain enabled. Use a trusted keyboard; these measures do
+- Screen capture is intentionally allowed in this recording preview, including
+  on the approval screen. Use dummy values for recordings: unmasked values can
+  appear in screenshots, screen recordings and app-switcher previews. Disabled
+  input autofill/view saving and backup exclusions remain enabled. Use a trusted keyboard; these measures do
   not protect against root or an untrusted operating system.
 
 ## Build and verify
@@ -87,7 +89,7 @@ export JAVA_HOME=/path/to/jdk-21
 ./android/build-apk.sh
 ```
 
-Output: `android/build/omaquery-0.2.1.apk`. Version code 3 updates the previous
+Output: `android/build/omaquery-0.2.2.apk`. Version code 4 updates the previous
 preview when signed with the same key. The script reuses `~/.android/debug.keystore`
 or `ANDROID_DEBUG_KEYSTORE`; this is development signing, not a release key.
 `OMAQUERY_BRIDGE_URL` can prefill a non-secret literal tailnet IPv4 address.

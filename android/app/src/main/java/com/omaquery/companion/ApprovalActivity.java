@@ -11,7 +11,6 @@ import android.os.Looper;
 import android.text.InputType;
 import android.view.View;
 import android.view.WindowInsets;
-import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -77,9 +76,7 @@ public final class ApprovalActivity extends Activity {
   @Override
   public void onCreate(Bundle state) {
     super.onCreate(state);
-    // Prevent Android from persisting text input when the activity is recreated.
-    getWindow().setFlags(
-        WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
+    // Screen capture is intentionally allowed in this recording preview.
     ScrollView scroll = new ScrollView(this);
     scroll.setFillViewport(true);
     scroll.setBackgroundColor(BG);
