@@ -127,6 +127,13 @@ omaquery run DEMO_TOKEN -- sh -c 'printf "%s\n" "$DEMO_TOKEN"'
   out of the agent's direct input; it cannot constrain what the approved command
   does with them.
 
+## Experimental Android companion
+
+An opt-in Android proof of concept is available on this branch. It connects to
+an explicitly enabled, peer-restricted Tailscale bridge using SSE. The app must
+remain open; background notifications and app-level pairing are not implemented.
+See [the Android setup and security boundaries](android/README.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE). Development notes are in [AGENTS.md](AGENTS.md).
